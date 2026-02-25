@@ -7,6 +7,7 @@ import { useAuthContext } from '../context/AuthContext';
 import { GameCanvas } from '../components/GameCanvas';
 import { GameHUD } from '../components/GameHUD';
 import { PLAYER_LIVES } from '../game/constants';
+import type { PlanetConfig, PowerupKind } from '../game/constants';
 
 interface Props { navigate: NavigateFn; ctx: PageContext; }
 
@@ -14,10 +15,18 @@ export function GamePage({ navigate, ctx }: Props) {
   const wallet = useWalletContext();
   const auth   = useAuthContext();
 
-  const [score,   setScore]   = useState(0);
-  const [wave,    setWave]    = useState(1);
-  const [lives,   setLives]   = useState(PLAYER_LIVES);
-  const [loading, setLoading] = useState(true);
+  const [score,         setScore]         = useState(0);
+  const [wave,          setWave]          = useState(1);
+  const [lives,         setLives]         = useState(PLAYER_LIVES);
+  const [loading,       setLoading]       = useState(true);
+  const [currentPlanet,  setCurrentPlanet]  = useState<PlanetConfig | null>(null);
+  const [weaponFrames,   setWeaponFrames]   = useState(0);
+  const [shieldActive,   setShieldActive]   = useState(false);
+
+  const handlePowerup = useCallback((_kind: PowerupKind | null, wf: number, sa: boolean) => {
+    setWeaponFrames(wf);
+    setShieldActive(sa);
+  }, []);
 
   // Session is created in useEffect; token may come from auth context or be created fresh
   const sessionIdRef = useRef<string | null>(null);
@@ -117,8 +126,35 @@ export function GamePage({ navigate, ctx }: Props) {
           onWave={setWave}
           onLives={setLives}
           onKill={handleKill}
+          onPlanet={setCurrentPlanet}
+          onPowerup={handlePowerup}
         />
       </div>
+
+      {/* Active booster strip */}
+      {(weaponFrames > 0 || shieldActive) && (
+        <div style={{
+          padding: '4px 20px',
+          background: 'rgba(10,10,30,0.97)',
+          borderTop: '1px solid rgba(74,158,255,0.15)',
+          fontFamily: 'var(--font-pixel)',
+          fontSize: 8,
+          display: 'flex',
+          gap: 20,
+          alignItems: 'center',
+        }}>
+          {weaponFrames > 0 && (
+            <span style={{ color: '#f7931a' }}>
+              ⚡ WEAPON BOOST — {Math.ceil(weaponFrames / 60)}s
+            </span>
+          )}
+          {shieldActive && (
+            <span style={{ color: 'var(--color-blue)' }}>
+              🛡 SHIELD ACTIVE
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Controls hint */}
       <div style={{
@@ -134,7 +170,17 @@ export function GamePage({ navigate, ctx }: Props) {
         gap: 8,
       }}>
         <span>WASD / ARROWS — MOVE</span>
-        <span style={{ color: '#ffd700' }}>🌕 PROTECT THE MOON — LOSE 10,000 PTS IF DESTROYED</span>
+        {currentPlanet
+          ? (
+            <span style={{ color: '#ffd700' }}>
+              {currentPlanet.glyph} PROTECT THE {currentPlanet.label} — LOSE {currentPlanet.penalty.toLocaleString()} PTS IF DESTROYED
+            </span>
+          ) : (
+            <span style={{ color: '#e74c3c' }}>
+              ⚡ BOSS WAVE — DESTROY THE BOSS!
+            </span>
+          )
+        }
         <span style={{ color: 'var(--color-blue)' }}>🔵 SHIELD = INVULNERABLE ENEMY — DODGE!</span>
       </div>
     </div>

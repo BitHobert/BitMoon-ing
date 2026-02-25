@@ -1,5 +1,5 @@
 import type { TierNumber } from '../types';
-import type { TierConfig } from './constants';
+import type { TierConfig, BossConfig, PlanetConfig, WaveSpawn, PowerupKind } from './constants';
 
 // ── Entities ──────────────────────────────────────────────────────────────────
 
@@ -31,6 +31,29 @@ export interface MoonEntity {
   y: number;
   alive: boolean;
   flashFrames: number;       // flashing when near an enemy
+  glyph: string;             // which planet emoji (🌕 🌍 🌎 🌏 🪐 🌑)
+  penalty: number;           // points lost if destroyed
+}
+
+export interface BossEntity {
+  x: number;
+  y: number;
+  vx: number;                // lateral velocity (bounces at screen edges)
+  hp: number;
+  maxHp: number;
+  alive: boolean;
+  flashFrames: number;       // hit flash countdown
+  fireTimer: number;         // frames until next shot
+  phase: number;             // sine phase for Y oscillation
+  cfg: BossConfig;
+}
+
+export interface PowerupEntity {
+  id:    number;
+  x:     number;
+  y:     number;
+  kind:  PowerupKind;
+  alive: boolean;
 }
 
 export interface BulletEntity {
@@ -70,14 +93,20 @@ export interface GameState {
   player:     PlayerEntity;
   enemies:    EnemyEntity[];
   moon:       MoonEntity | null;
+  boss:       BossEntity | null;        // active boss (boss waves only)
+  currentPlanet: PlanetConfig | null;  // planet being protected this wave
+  powerups:   PowerupEntity[];
   bullets:    BulletEntity[];
   particles:  ParticleEntity[];
-  nextSpawns: import('./constants').WaveSpawn[];   // queued spawns for current wave
+  weaponFrames:  number;   // frames remaining on weapon boost (0 = inactive)
+  shieldActive:  boolean;  // absorbs next hit
+  nextSpawns: WaveSpawn[];             // queued spawns for current wave
   spawnTick:  number;        // tick when wave started (for spawn timing)
   shootCooldown: number;
-  nextEnemyId:   number;
-  nextBulletId:  number;
-  moonSpawned:   boolean;    // has the moon been spawned this wave
+  nextEnemyId:    number;
+  nextBulletId:   number;
+  nextPowerupId:  number;
+  moonSpawned:    boolean;    // has the moon been spawned this wave
 }
 
 // ── Engine callbacks ──────────────────────────────────────────────────────────
@@ -88,4 +117,6 @@ export interface GameCallbacks {
   onLives:    (lives: number) => void;
   onGameOver: (finalScore: number, burned: bigint) => void;
   onKill:     (tier: TierNumber, points: number, scarcityMultiplier: number) => void;
+  onPlanet:   (planet: PlanetConfig | null) => void;
+  onPowerup:  (kind: PowerupKind | null, weaponFrames: number, shieldActive: boolean) => void;
 }

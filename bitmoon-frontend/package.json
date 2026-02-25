@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@btc-vision/bitcoin": "^6.5.1",
     "@btc-vision/transaction": "latest",
     "opnet": "^1.8.1-rc.14",
     "react": "^18.3.1",

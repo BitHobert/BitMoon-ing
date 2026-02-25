@@ -1,6 +1,8 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { GameEngine } from '../game/GameEngine';
 import { CANVAS_W, CANVAS_H } from '../game/constants';
+import type { PlanetConfig } from '../game/constants';
+import type { PowerupKind } from '../game/constants';
 import { useWsContext } from '../context/WsContext';
 import type { TierNumber, GameEvent } from '../types';
 
@@ -10,9 +12,11 @@ interface Props {
   onWave:     (wave: number)   => void;
   onLives:    (lives: number)  => void;
   onKill:     (tier: TierNumber, points: number, mult: number) => void;
+  onPlanet:   (planet: PlanetConfig | null) => void;
+  onPowerup:  (kind: PowerupKind | null, weaponFrames: number, shieldActive: boolean) => void;
 }
 
-export function GameCanvas({ onGameOver, onScore, onWave, onLives, onKill }: Props) {
+export function GameCanvas({ onGameOver, onScore, onWave, onLives, onKill, onPlanet, onPowerup }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const { scarcityMultiplier } = useWsContext();
@@ -37,6 +41,8 @@ export function GameCanvas({ onGameOver, onScore, onWave, onLives, onKill }: Pro
       onLives,
       onKill,
       onGameOver: handleGameOver,
+      onPlanet,
+      onPowerup,
     });
     engineRef.current = engine;
     engine.start();

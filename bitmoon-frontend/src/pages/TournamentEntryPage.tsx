@@ -5,7 +5,7 @@ import { getTournaments, enterTournament } from '../api/http';
 import { useWalletContext } from '../context/WalletContext';
 import { useAuthContext } from '../context/AuthContext';
 import { JSONRpcProvider } from 'opnet';
-import { BinaryWriter, MessageSigner } from '@btc-vision/transaction';
+import { Address, BinaryWriter, MessageSigner } from '@btc-vision/transaction';
 import { networks } from '@btc-vision/bitcoin';
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -16,7 +16,7 @@ const OPNET_RPC: string =
 function rpcNetwork() {
   if (OPNET_RPC.includes('mainnet')) return networks.bitcoin;
   if (OPNET_RPC.includes('regtest')) return networks.regtest;
-  return networks.opnetTestnet;
+  return networks.testnet;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -109,7 +109,7 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
     try {
       // 1. Fetch UTXOs from OPNet node
       const network  = rpcNetwork();
-      const provider = new JSONRpcProvider(OPNET_RPC, network);
+      const provider = new JSONRpcProvider({ url: OPNET_RPC, network });
       const utxos    = await provider.utxoManager.getUTXOs({
         address:  wallet.address,
         optimize: false,
@@ -118,7 +118,7 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
       // 2. Encode OP-20 transfer(prizeContractAddress, entryFee) calldata
       const writer = new BinaryWriter();
       writer.writeSelector(0xa9059cbb);                         // transfer(address,uint256)
-      writer.writeAddress(tournament.prizeContractAddress);
+      writer.writeAddress(Address.fromString(tournament.prizeContractAddress));
       writer.writeU256(BigInt(tournament.entryFee));
       const calldata = writer.getBuffer();
 
