@@ -1,0 +1,111 @@
+:root {
+  --color-bg:        #0a0a0f;
+  --color-bg-card:   #111118;
+  --color-bg-hover:  #1a1a24;
+  --color-orange:    #F7931A;
+  --color-orange-dim:#a8640f;
+  --color-blue:      #00D4FF;
+  --color-blue-dim:  #008caa;
+  --color-green:     #39ff14;
+  --color-red:       #ff3b3b;
+  --color-text:      #e8e8e8;
+  --color-text-dim:  #888;
+  --color-border:    #2a2a3a;
+  --font-pixel:      'Press Start 2P', monospace;
+  --font-mono:       'Courier New', monospace;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  min-height: 100vh;
+}
+
+/* Pixel-style scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--color-bg); }
+::-webkit-scrollbar-thumb { background: var(--color-orange-dim); border-radius: 3px; }
+
+/* Utility: glow effects */
+.glow-orange { text-shadow: 0 0 8px var(--color-orange), 0 0 20px var(--color-orange-dim); }
+.glow-blue   { text-shadow: 0 0 8px var(--color-blue), 0 0 20px var(--color-blue-dim); }
+.glow-green  { text-shadow: 0 0 8px var(--color-green); }
+
+/* Retro card style */
+.card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 16px;
+}
+.card:hover {
+  border-color: var(--color-orange-dim);
+  box-shadow: 0 0 12px rgba(247, 147, 26, 0.15);
+}
+
+/* Pixel font headings */
+.pixel { font-family: var(--font-pixel); }
+
+/* Button base */
+.btn {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  padding: 10px 16px;
+  border: 1px solid;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: box-shadow 0.15s, background 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.btn-orange {
+  background: transparent;
+  color: var(--color-orange);
+  border-color: var(--color-orange);
+}
+.btn-orange:hover {
+  background: rgba(247, 147, 26, 0.12);
+  box-shadow: 0 0 12px rgba(247, 147, 26, 0.4);
+}
+.btn-blue {
+  background: transparent;
+  color: var(--color-blue);
+  border-color: var(--color-blue);
+}
+.btn-blue:hover {
+  background: rgba(0, 212, 255, 0.1);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.3);
+}
+.btn-solid-orange {
+  background: var(--color-orange);
+  color: #000;
+  border-color: var(--color-orange);
+  font-weight: bold;
+}
+.btn-solid-orange:hover {
+  box-shadow: 0 0 18px rgba(247, 147, 26, 0.6);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* CRT scanline overlay (applied to canvas wrapper) */
+.crt::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.15) 2px,
+    rgba(0, 0, 0, 0.15) 4px
+  );
+  pointer-events: none;
+  z-index: 10;
+}
+.crt {
+  position: relative;
+}
