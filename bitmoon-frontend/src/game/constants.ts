@@ -83,7 +83,7 @@ export const BOSS_POOL: BossConfig[] = [
     burnUnits:    100_000_000_000n,
     speed:        1.8,
     fireRate:     35,
-    bulletSpread: 5,
+    bulletSpread: 1,
   },
   // Add more bosses here — they cycle every 5 waves
 ];

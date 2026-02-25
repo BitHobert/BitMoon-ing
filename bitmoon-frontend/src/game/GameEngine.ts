@@ -517,15 +517,6 @@ export class GameEngine {
       }
     }
 
-    // Boss body vs player
-    if (s.boss?.alive && s.player.invincibleFrames === 0) {
-      const dx = s.boss.x - s.player.x;
-      const dy = s.boss.y - s.player.y;
-      if (Math.sqrt(dx * dx + dy * dy) < PLAYER_SIZE + 32) {
-        this.hitPlayer();
-      }
-    }
-
     // Player collects powerups
     for (let i = s.powerups.length - 1; i >= 0; i--) {
       const pu = s.powerups[i];
