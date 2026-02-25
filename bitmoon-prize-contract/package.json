@@ -1,0 +1,19 @@
+{
+    "name": "bitmoon-prize-contract",
+    "version": "0.0.1",
+    "description": "BitMoon prize distribution smart contract for OPNet",
+    "private": true,
+    "scripts": {
+        "build": "asc src/index.ts --target release --measure --uncheckedBehavior never"
+    },
+    "dependencies": {
+        "@btc-vision/as-bignum": "^0.0.5",
+        "@btc-vision/btc-runtime": "^1.9.10",
+        "@btc-vision/opnet-transform": "^0.1.12",
+        "@btc-vision/transaction": "^1.6.17"
+    },
+    "devDependencies": {
+        "assemblyscript": "^0.28.4",
+        "typescript": "^5.9.2"
+    }
+}

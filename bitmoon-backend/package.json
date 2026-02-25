@@ -1,0 +1,29 @@
+{
+    "name": "bitmoon-backend",
+    "version": "1.0.0",
+    "description": "BitMoon'ing game backend — deflationary Space Invaders on OPNet/Bitcoin",
+    "type": "module",
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc",
+        "start": "node dist/index.js",
+        "dev": "tsc --watch & node --watch dist/index.js",
+        "typecheck": "tsc --noEmit",
+        "postinstall": "node scripts/patch-noble-hashes.mjs"
+    },
+    "dependencies": {
+        "@btc-vision/bitcoin": "rc",
+        "@btc-vision/hyper-express": "latest",
+        "@btc-vision/transaction": "rc",
+        "@btc-vision/uwebsockets.js": "^20.57.0",
+        "mongodb": "^6.12.0",
+        "opnet": "rc"
+    },
+    "devDependencies": {
+        "@types/node": "latest",
+        "typescript": "latest"
+    },
+    "engines": {
+        "node": ">=20.0.0"
+    }
+}
