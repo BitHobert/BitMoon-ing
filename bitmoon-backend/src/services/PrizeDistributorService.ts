@@ -11,7 +11,7 @@ import {
     PRIZE_DISTRIBUTOR_ABI,
     type IPrizeDistributorContract,
 } from '../contracts/PrizeDistributorABI.js';
-import type { PrizeDistribution, TournamentType } from '../types/index.js';
+import type { PrizeDistribution, SponsorBonus, TournamentType } from '../types/index.js';
 
 type DistributionDoc = PrizeDistribution;
 
@@ -27,6 +27,7 @@ export class PrizeDistributorService {
     private static instance: PrizeDistributorService;
 
     private distributions!: Collection<DistributionDoc>;
+    private sponsorBonuses!: Collection<SponsorBonus>;
     private wallet!: Wallet;
     private operatorAddress!: Address;
     private watcherTimer: ReturnType<typeof setTimeout> | null = null;
@@ -47,6 +48,12 @@ export class PrizeDistributorService {
         await this.distributions.createIndex(
             { tournamentType: 1, tournamentKey: 1 },
             { unique: true, name: 'unique_distribution_per_period' },
+        );
+
+        this.sponsorBonuses = db.collection<SponsorBonus>('sponsor_bonuses');
+        await this.sponsorBonuses.createIndex(
+            { tournamentType: 1, tournamentKey: 1, slotIndex: 1 },
+            { unique: true, name: 'unique_bonus_per_slot' },
         );
 
         if (Config.OPERATOR_PRIVATE_KEY) {
@@ -127,6 +134,80 @@ export class PrizeDistributorService {
             { tournamentType: type },
             { sort: { distributedAt: -1 } },
         );
+    }
+
+    /**
+     * Records a sponsor bonus on-chain by calling depositBonus() on the PrizeDistributor contract.
+     *
+     * The caller is responsible for verifying that `amount` of `tokenAddress` tokens have already
+     * been transferred to the contract address on-chain BEFORE calling this method.
+     *
+     * Throws on validation failure, contract call failure, or DB error.
+     * Returns the persisted SponsorBonus document.
+     */
+    public async depositBonus(
+        tournamentType: TournamentType,
+        periodKey: string,
+        tokenAddress: string,
+        amount: bigint,
+    ): Promise<SponsorBonus> {
+        if (!this.isContractReady()) {
+            throw new Error('PrizeDistributorService: contract not configured');
+        }
+
+        const typeIndex       = this.typeIndex(tournamentType);
+        const periodKeyBigInt = BigInt(periodKey);
+        const tokenAddr       = Address.fromString(tokenAddress);
+
+        const contract = this.getContract();
+        const call = await contract.depositBonus(typeIndex, periodKeyBigInt, tokenAddr, amount);
+        const txResult = await call.sendTransaction(this.txParams());
+        const txid = txResult.transactionId;
+
+        console.log(
+            `[PrizeDistributorService] depositBonus tx sent for ${tournamentType}/${periodKey}:`,
+            txid,
+        );
+
+        // Extract slotIndex from the emitted SponsorBonusDeposited event
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const events: any[] = (txResult as any).events ?? [];
+        const depositEvent = events.find((e: { eventName?: string }) => e.eventName === 'SponsorBonusDeposited');
+        const slotIndex: number = depositEvent != null
+            ? Number((depositEvent.data as { slotIndex?: unknown }).slotIndex ?? 0)
+            : 0;
+
+        const doc: SponsorBonus = {
+            _id:            randomUUID(),
+            tournamentType,
+            tournamentKey:  periodKey,
+            tokenAddress,
+            amount:         amount.toString(),
+            slotIndex,
+            txHash:         txid,
+            depositedAt:    Date.now(),
+        };
+
+        try {
+            await this.sponsorBonuses.insertOne(doc);
+        } catch (err) {
+            // Unique index violation — duplicate slot (should not happen in normal flow)
+            if ((err as NodeJS.ErrnoException & { code?: number }).code !== 11000) throw err;
+        }
+
+        return doc;
+    }
+
+    /**
+     * Returns all sponsor bonuses for a given tournament period, ordered by slot index.
+     */
+    public async getBonusesForPeriod(
+        tournamentType: TournamentType,
+        periodKey: string,
+    ): Promise<SponsorBonus[]> {
+        return this.sponsorBonuses
+            .find({ tournamentType, tournamentKey: periodKey }, { sort: { slotIndex: 1 } })
+            .toArray();
     }
 
     // ── Watcher internals ──────────────────────────────────────────────────────

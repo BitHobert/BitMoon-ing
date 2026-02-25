@@ -14,6 +14,7 @@ import type {
     LeaderboardType,
     SessionEndRequest,
     SessionStartRequest,
+    SponsorBonusRequest,
     TournamentType,
 } from '../types/index.js';
 
@@ -180,6 +181,15 @@ export class ApiServer {
 
         this.app.get('/v1/admin/prize-distributions', async (req, res) => {
             await this.handleAdminListDistributions(req, res);
+        });
+
+        // Admin — sponsor bonus deposit & query
+        this.app.post('/v1/admin/sponsor-bonus', async (req, res) => {
+            await this.handleAdminDepositBonus(req, res);
+        });
+
+        this.app.get('/v1/admin/sponsor-bonus', async (req, res) => {
+            await this.handleAdminGetBonuses(req, res);
         });
     }
 
@@ -540,6 +550,73 @@ export class ApiServer {
         const distributions = await PrizeDistributorService.getInstance()
             .getDistributions(limit, offset);
         res.json({ distributions, limit, offset });
+    }
+
+    /**
+     * POST /v1/admin/sponsor-bonus
+     * Body: { tournamentType, periodKey, tokenAddress, amount }
+     *
+     * The operator must verify the sponsor's OP-20 token transfer to the PrizeDistributor
+     * contract address BEFORE calling this endpoint. This records the bonus on-chain.
+     */
+    private async handleAdminDepositBonus(req: Req, res: Res): Promise<void> {
+        if (!this.verifyAdmin(req, res)) return;
+
+        let body: SponsorBonusRequest;
+        try { body = await req.json() as SponsorBonusRequest; }
+        catch { res.status(400).json({ error: 'Invalid JSON body' }); return; }
+
+        const { tournamentType, periodKey, tokenAddress, amount } = body;
+
+        if (!tournamentType || !['daily', 'weekly', 'monthly'].includes(tournamentType)) {
+            res.status(400).json({ error: 'tournamentType must be daily | weekly | monthly' });
+            return;
+        }
+        if (!periodKey || !/^\d+$/.test(periodKey)) {
+            res.status(400).json({ error: 'periodKey must be a non-negative integer string' });
+            return;
+        }
+        if (!tokenAddress || typeof tokenAddress !== 'string' || tokenAddress.trim() === '') {
+            res.status(400).json({ error: 'tokenAddress must be a non-empty string' });
+            return;
+        }
+        if (!amount || !/^\d+$/.test(amount) || BigInt(amount) <= 0n) {
+            res.status(400).json({ error: 'amount must be a positive integer string (raw token units)' });
+            return;
+        }
+
+        try {
+            const bonus = await PrizeDistributorService.getInstance()
+                .depositBonus(tournamentType, periodKey, tokenAddress.trim(), BigInt(amount));
+            res.status(201).json({ success: true, bonus });
+        } catch (err: unknown) {
+            const message = (err as Error).message ?? 'depositBonus failed';
+            res.status(500).json({ error: message });
+        }
+    }
+
+    /**
+     * GET /v1/admin/sponsor-bonus?tournamentType=daily&periodKey=100
+     * Returns all sponsor bonuses recorded for the specified tournament period.
+     */
+    private async handleAdminGetBonuses(req: Req, res: Res): Promise<void> {
+        if (!this.verifyAdmin(req, res)) return;
+
+        const tournamentType = String(req.query['tournamentType'] ?? '') as TournamentType;
+        const periodKey      = String(req.query['periodKey']      ?? '');
+
+        if (!['daily', 'weekly', 'monthly'].includes(tournamentType)) {
+            res.status(400).json({ error: 'tournamentType query param must be daily | weekly | monthly' });
+            return;
+        }
+        if (!/^\d+$/.test(periodKey)) {
+            res.status(400).json({ error: 'periodKey query param must be a non-negative integer string' });
+            return;
+        }
+
+        const bonuses = await PrizeDistributorService.getInstance()
+            .getBonusesForPeriod(tournamentType, periodKey);
+        res.json({ tournamentType, periodKey, bonuses });
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

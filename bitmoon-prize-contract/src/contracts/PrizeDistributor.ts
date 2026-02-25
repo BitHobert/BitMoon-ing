@@ -19,6 +19,8 @@ import {
 } from '@btc-vision/btc-runtime/runtime';
 import { EntryRecordedEvent } from './events/EntryRecordedEvent';
 import { PrizeDistributedEvent } from './events/PrizeDistributedEvent';
+import { SponsorBonusDepositedEvent } from './events/SponsorBonusDepositedEvent';
+import { SponsorBonusDistributedEvent } from './events/SponsorBonusDistributedEvent';
 
 // ── Storage pointers (allocated once at module load; order must never change) ──
 
@@ -49,12 +51,24 @@ const lastDistKey2Pointer: u16 = Blockchain.nextPointer;
 // devPool — global accumulated 5 % dev cuts
 const devPoolPointer: u16 = Blockchain.nextPointer;
 
+// ── Sponsor bonus storage pointers (appended; order must never change) ────────
+
+// sponsorCount[type, periodKey] → u256 number of bonus slots for a period
+const sponsorCountPointer:  u16 = Blockchain.nextPointer; // 16
+
+// sponsorAmount[type, periodKey, slot] → u256 bonus amount at that slot
+const sponsorAmountPointer: u16 = Blockchain.nextPointer; // 17
+
+// sponsorToken[type, periodKey, slot]  → u256 (sponsor OP-20 token address, 20 bytes left-padded)
+const sponsorTokenPointer:  u16 = Blockchain.nextPointer; // 18
+
 // ── Method selectors ──────────────────────────────────────────────────────────
 
 const RECORD_ENTRY_SELECTOR:     u32 = encodeSelector('recordEntry(uint8,uint256,uint256)');
 const DISTRIBUTE_PRIZE_SELECTOR: u32 = encodeSelector('distributePrize(uint8,uint256,address,address,address)');
 const SET_OPERATOR_SELECTOR:     u32 = encodeSelector('setOperator(address)');
 const SET_DEV_WALLET_SELECTOR:   u32 = encodeSelector('setDevWallet(address)');
+const DEPOSIT_BONUS_SELECTOR:    u32 = encodeSelector('depositBonus(uint8,uint256,address,uint256)');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -63,6 +77,62 @@ function isZeroAddress(addr: Address): bool {
         if (addr[i] !== 0) return false;
     }
     return true;
+}
+
+/**
+ * Build a 30-byte sub-pointer key for the sponsor storage maps.
+ *
+ * Layout:
+ *   byte  0:    tournamentType (u8)
+ *   bytes 1–8:  low 8 bytes of periodKey (lo1 field, big-endian) — block nums fit in u64
+ *   bytes 9–12: slotIndex (u32, big-endian); use COUNT_SENTINEL (0xFFFFFFFF) for count keys
+ *   bytes 13–29: zero padding
+ */
+function makeSponsorKey(tournamentType: u8, periodKey: u256, slot: u32): Uint8Array {
+    const key = new Uint8Array(30);
+    key[0] = tournamentType;
+    const lo1: u64 = periodKey.lo1;
+    key[1] = u8((lo1 >> 56) & 0xFF);
+    key[2] = u8((lo1 >> 48) & 0xFF);
+    key[3] = u8((lo1 >> 40) & 0xFF);
+    key[4] = u8((lo1 >> 32) & 0xFF);
+    key[5] = u8((lo1 >> 24) & 0xFF);
+    key[6] = u8((lo1 >> 16) & 0xFF);
+    key[7] = u8((lo1 >>  8) & 0xFF);
+    key[8] = u8( lo1        & 0xFF);
+    key[9]  = u8((slot >> 24) & 0xFF);
+    key[10] = u8((slot >> 16) & 0xFF);
+    key[11] = u8((slot >>  8) & 0xFF);
+    key[12] = u8( slot        & 0xFF);
+    return key;
+}
+
+/** Sentinel slot value used for the count key (impossible as a real slot index). */
+const COUNT_SENTINEL: u32 = 0xFFFFFFFF;
+
+/**
+ * Encode a 20-byte Address into the low 20 bytes of a big-endian u256
+ * (bytes 0-11 are zero, bytes 12-31 are the address).
+ */
+function addressToU256(addr: Address): u256 {
+    const buf = new Uint8Array(32);
+    for (let i: i32 = 0; i < ADDRESS_BYTE_LENGTH; i++) {
+        buf[12 + i] = addr[i];
+    }
+    return u256.fromBytes(buf, true);
+}
+
+/**
+ * Decode a u256 produced by addressToU256() back into an Address.
+ * Extracts bytes 12-31 of the big-endian 32-byte representation.
+ */
+function u256ToAddress(val: u256): Address {
+    const buf  = val.toBytes(true); // big-endian 32 bytes
+    const addr = new Uint8Array(ADDRESS_BYTE_LENGTH);
+    for (let i: i32 = 0; i < ADDRESS_BYTE_LENGTH; i++) {
+        addr[i] = buf[12 + i];
+    }
+    return addr as Address;
 }
 
 // ── Contract ──────────────────────────────────────────────────────────────────
@@ -174,6 +244,9 @@ export class PrizeDistributor extends OP_NET {
 
             case SET_DEV_WALLET_SELECTOR:
                 return this._setDevWallet(calldata);
+
+            case DEPOSIT_BONUS_SELECTOR:
+                return this._depositBonus(calldata);
 
             default:
                 return super.execute(method, calldata);
@@ -351,6 +424,28 @@ export class PrizeDistributor extends OP_NET {
             this._devPool.value = u256.Zero;
         }
 
+        // ── Sponsor bonus distribution ──────────────────────────────────────────
+        // If w1 is a valid winner, transfer every deposited sponsor bonus to them.
+        // If there is no winner, bonuses remain locked in the contract.
+        {
+            const countKey     = makeSponsorKey(tournamentType, periodKey, COUNT_SENTINEL);
+            const sponsorCount = u32(new StoredU256(sponsorCountPointer, countKey).value.lo1);
+            if (v1 && sponsorCount > 0) {
+                for (let slot: u32 = 0; slot < sponsorCount; slot++) {
+                    const slotKey    = makeSponsorKey(tournamentType, periodKey, slot);
+                    const tokenAsU256 = new StoredU256(sponsorTokenPointer,  slotKey).value;
+                    const bonusAmt    = new StoredU256(sponsorAmountPointer, slotKey).value;
+                    if (!u256.eq(bonusAmt, u256.Zero)) {
+                        const bonusToken = u256ToAddress(tokenAsU256);
+                        TransferHelper.transfer(bonusToken, w1, bonusAmt);
+                        this.emitEvent(new SponsorBonusDistributedEvent(
+                            tournamentType, periodKey, tokenAsU256, bonusAmt, w1,
+                        ));
+                    }
+                }
+            }
+        }
+
         // Mark period as distributed
         this.lastDistKey(tournamentType).value = periodKey;
 
@@ -378,6 +473,64 @@ export class PrizeDistributor extends OP_NET {
         const newDevWallet = calldata.readAddress();
         if (isZeroAddress(newDevWallet)) throw new Revert('PrizeDistributor: zero dev wallet');
         this._devWallet.value = newDevWallet;
+        return new BytesWriter(0);
+    }
+
+    /**
+     * depositBonus(tournamentType: u8, periodKey: u256, tokenAddress: address, amount: u256)
+     *
+     * Called by the backend operator to record a sponsor bonus for a future prize period.
+     * The operator must verify the off-chain OP-20 transfer of `amount` `tokenAddress` tokens
+     * to this contract address before calling. Non-refundable once deposited.
+     *
+     * Unlimited sponsor slots per (tournamentType, periodKey). Each slot stores:
+     *   - the OP-20 token contract address (as u256)
+     *   - the bonus amount in raw token units
+     *
+     * At distributePrize() time, all bonus slots for the period are transferred to w1 (1st place).
+     * If there is no valid winner, bonus tokens remain locked in the contract.
+     */
+    private _depositBonus(calldata: Calldata): BytesWriter {
+        this.requireOperator();
+
+        const tournamentType = calldata.readU8();
+        const periodKey      = calldata.readU256();
+        const tokenAddress   = calldata.readAddress();
+        const amount         = calldata.readU256();
+
+        if (tournamentType > 2) {
+            throw new Revert('PrizeDistributor: invalid tournament type');
+        }
+        if (u256.eq(this.lastDistKey(tournamentType).value, periodKey)) {
+            throw new Revert('PrizeDistributor: period already distributed');
+        }
+        if (u256.eq(amount, u256.Zero)) {
+            throw new Revert('PrizeDistributor: zero bonus amount');
+        }
+        if (isZeroAddress(tokenAddress)) {
+            throw new Revert('PrizeDistributor: zero bonus token address');
+        }
+
+        const tokenAsU256 = addressToU256(tokenAddress);
+
+        // Read current slot count for this (type, periodKey)
+        const countKey   = makeSponsorKey(tournamentType, periodKey, COUNT_SENTINEL);
+        const countStore = new StoredU256(sponsorCountPointer, countKey);
+        const currentCount: u256 = countStore.value;
+        const slotIndex: u32     = u32(currentCount.lo1);
+
+        // Write token address and amount at this slot
+        const slotKey = makeSponsorKey(tournamentType, periodKey, slotIndex);
+        new StoredU256(sponsorTokenPointer,  slotKey).value = tokenAsU256;
+        new StoredU256(sponsorAmountPointer, slotKey).value = amount;
+
+        // Increment count
+        countStore.value = SafeMath.add(currentCount, u256.fromU32(1));
+
+        this.emitEvent(new SponsorBonusDepositedEvent(
+            tournamentType, periodKey, tokenAsU256, amount, slotIndex,
+        ));
+
         return new BytesWriter(0);
     }
 }

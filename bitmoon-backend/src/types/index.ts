@@ -248,3 +248,44 @@ export interface PrizeDistribution {
     /** Block at which distribution was triggered */
     readonly blockNumber: string;
 }
+
+// ─── Sponsor Bonus ────────────────────────────────────────────────────────────
+
+/**
+ * Request body for POST /v1/admin/sponsor-bonus.
+ * The operator must verify the on-chain OP-20 transfer of the bonus tokens
+ * to the PrizeDistributor contract before calling this endpoint.
+ */
+export interface SponsorBonusRequest {
+    /** Tournament type receiving the bonus */
+    readonly tournamentType: TournamentType;
+    /**
+     * Period key (start block number as a string).
+     * Must be a non-negative integer and must not be an already-distributed period.
+     */
+    readonly periodKey: string;
+    /** OP-20 token contract address of the sponsor's bonus token */
+    readonly tokenAddress: string;
+    /** Bonus amount in raw token units (positive integer as string, for BigInt safety) */
+    readonly amount: string;
+}
+
+/**
+ * MongoDB document for a recorded sponsor bonus deposit.
+ * Stored in the 'sponsor_bonuses' collection.
+ */
+export interface SponsorBonus {
+    readonly _id: string;                    // UUID v4
+    readonly tournamentType: TournamentType;
+    /** Period start block — matches tournamentKey in tournament_entries */
+    readonly tournamentKey: string;
+    /** OP-20 token contract address of the bonus token */
+    readonly tokenAddress: string;
+    /** Bonus amount in raw token units, as string */
+    readonly amount: string;
+    /** On-chain slot index assigned by the contract (0-based) */
+    readonly slotIndex: number;
+    /** On-chain depositBonus() transaction hash */
+    readonly txHash: string;
+    readonly depositedAt: number;            // Unix timestamp (ms)
+}
