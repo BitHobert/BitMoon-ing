@@ -33,6 +33,7 @@ export interface MoonEntity {
   flashFrames: number;       // flashing when near an enemy
   glyph: string;             // which planet emoji (🌕 🌍 🌎 🌏 🪐 🌑)
   penalty: number;           // points lost if destroyed
+  spriteId?: string;         // if set, use custom canvas draw instead of emoji
 }
 
 export interface BossEntity {
@@ -47,6 +48,7 @@ export interface BossEntity {
   phase: number;             // sine phase for Y oscillation
   poolIndex: number;         // index into BOSS_POOL (for HP persistence)
   cfg: BossConfig;
+  trail: { x: number; y: number }[];  // head position history (reserved for future boss patterns)
 }
 
 export interface PowerupEntity {

@@ -142,6 +142,7 @@ export class GameEngine {
         phase:       0,
         poolIndex,
         cfg,
+        trail:       [],
       };
     } else {
       // Regular wave: random planet to protect
@@ -213,8 +214,9 @@ export class GameEngine {
         y:           CANVAS_H * MOON_Y_LANE,
         alive:       true,
         flashFrames: 0,
-        glyph:       planet?.glyph   ?? '🌕',
-        penalty:     planet?.penalty ?? 10_000,
+        glyph:       planet?.glyph    ?? '🌕',
+        penalty:     planet?.penalty  ?? 10_000,
+        spriteId:    planet?.spriteId,
       };
       s.moonSpawned = true;
     }
@@ -369,12 +371,11 @@ export class GameEngine {
       return;
     }
 
-    // Lateral patrol: bounce between 100 ↔ CANVAS_W - 100 (no enrage)
+    // Standard lateral patrol + gentle sine Y oscillation for all bosses
     boss.x += boss.vx;
     if (boss.x >= CANVAS_W - 100) { boss.x = CANVAS_W - 100; boss.vx = -boss.cfg.speed; }
     if (boss.x <= 100)            { boss.x = 100;             boss.vx =  boss.cfg.speed; }
 
-    // Sine Y oscillation ±120 px, clamped to canvas
     boss.phase += 0.02;
     boss.y = Math.max(60, Math.min(CANVAS_H - 60,
       CANVAS_H / 2 + Math.sin(boss.phase) * 120,
@@ -692,10 +693,18 @@ export class GameEngine {
       const m = s.moon;
       const alpha = m.flashFrames > 0 ? 0.5 + 0.5 * Math.sin(m.flashFrames * 1.2) : 1;
       ctx.globalAlpha = alpha;
-      ctx.font = '38px serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(m.glyph, m.x, m.y);   // ← dynamic glyph
+      if (m.spriteId === 'purple') {
+        this.drawPurplePlanet(ctx, m.x, m.y);
+      } else if (m.spriteId === 'inferno') {
+        this.drawInfernoPlanet(ctx, m.x, m.y);
+      } else if (m.spriteId === 'saturn') {
+        this.drawSaturnPlanet(ctx, m.x, m.y);
+      } else {
+        ctx.font = '38px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(m.glyph, m.x, m.y);
+      }
       ctx.globalAlpha = 1;
       if (m.flashFrames > 0) {
         ctx.beginPath();
@@ -714,7 +723,15 @@ export class GameEngine {
       if (!e.alive) continue;
       const alpha = e.flashFrames > 0 ? 0.4 + 0.6 * Math.sin(e.flashFrames * 1.5) : 1;
       ctx.globalAlpha = alpha;
-      ctx.fillText(e.cfg.glyph, e.x, e.y);
+      if (e.cfg.tier === 3) {
+        this.drawAlienSprite(ctx, e.x, e.y, 28);
+      } else if (e.cfg.tier === 4) {
+        this.drawBugSprite(ctx, e.x, e.y, 28);
+      } else if (e.cfg.tier === 5) {
+        this.drawJellyfishSprite(ctx, e.x, e.y, 30);
+      } else {
+        ctx.fillText(e.cfg.glyph, e.x, e.y);
+      }
 
       if (e.invulnerable) {
         ctx.beginPath();
@@ -728,10 +745,11 @@ export class GameEngine {
       if (e.maxHp > 1) {
         const barW = 28, barH = 3;
         const hpFrac = e.hp / e.maxHp;
+        const barY = e.y + (e.cfg.tier === 3 || e.cfg.tier === 4 ? 24 : e.cfg.tier === 5 ? 28 : 14);
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.fillRect(e.x - barW / 2, e.y + 14, barW, barH);
+        ctx.fillRect(e.x - barW / 2, barY, barW, barH);
         ctx.fillStyle = hpFrac > 0.5 ? '#2ecc71' : hpFrac > 0.25 ? '#f7931a' : '#e74c3c';
-        ctx.fillRect(e.x - barW / 2, e.y + 14, barW * hpFrac, barH);
+        ctx.fillRect(e.x - barW / 2, barY, barW * hpFrac, barH);
       }
     }
 
@@ -740,10 +758,18 @@ export class GameEngine {
       const boss = s.boss;
       const alpha = boss.flashFrames > 0 ? 0.3 + 0.7 * Math.sin(boss.flashFrames * 1.5) : 1;
       ctx.globalAlpha = alpha;
-      ctx.font = `${boss.cfg.fontSize}px serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(boss.cfg.glyph, boss.x, boss.y);
+      if (boss.poolIndex === 1) {
+        this.drawUFOBoss(ctx, boss.x, boss.y);
+      } else if (boss.poolIndex === 2) {
+        this.drawRobotSkullBoss(ctx, boss.x, boss.y);
+      } else if (boss.poolIndex === 3) {
+        this.drawWatcherBoss(ctx, boss.x, boss.y);
+      } else {
+        ctx.font = `${boss.cfg.fontSize}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(boss.cfg.glyph, boss.x, boss.y);
+      }
       ctx.globalAlpha = 1;
 
       // Boss HP bar — full-width, top of canvas
@@ -897,5 +923,998 @@ export class GameEngine {
       ctx.shadowBlur = 0;
       ctx.fillText('SCORE: ' + s.score.toLocaleString(), W / 2, H / 2 + 20);
     }
+  }
+
+  // ── Tier 3 alien sprite (drawn procedurally — no image file needed) ──────────
+  private drawAlienSprite(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
+    const s = size / 32;
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // Horns (drawn first, behind body)
+    ctx.fillStyle = '#8c1bac';
+    ctx.beginPath();
+    ctx.moveTo(-6 * s, -10 * s);
+    ctx.lineTo(-11 * s, -22 * s);
+    ctx.lineTo(-2 * s, -13 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(6 * s, -10 * s);
+    ctx.lineTo(11 * s, -22 * s);
+    ctx.lineTo(2 * s, -13 * s);
+    ctx.closePath();
+    ctx.fill();
+
+    // Body (radial gradient, pink-purple)
+    const bodyGrad = ctx.createRadialGradient(-2 * s, -4 * s, 1, 0, 1 * s, 12 * s);
+    bodyGrad.addColorStop(0, '#ee66ff');
+    bodyGrad.addColorStop(1, '#881db0');
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 11 * s, 13 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Eyes — green with glow
+    ctx.save();
+    ctx.shadowColor = '#00ff55';
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = '#22ff66';
+    ctx.beginPath();
+    ctx.ellipse(-4 * s, -3 * s, 3.5 * s, 3.5 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(4 * s, -3 * s, 3.5 * s, 3.5 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Pupils
+    ctx.fillStyle = '#003311';
+    ctx.beginPath();
+    ctx.ellipse(-4 * s, -3 * s, 1.8 * s, 1.8 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(4 * s, -3 * s, 1.8 * s, 1.8 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Open mouth
+    ctx.fillStyle = '#220033';
+    ctx.beginPath();
+    ctx.arc(0, 6 * s, 5 * s, 0, Math.PI);
+    ctx.fill();
+
+    // Fangs
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(-3.5 * s, 6 * s);
+    ctx.lineTo(-2.5 * s, 11 * s);
+    ctx.lineTo(-1 * s, 6 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(1 * s, 6 * s);
+    ctx.lineTo(2.5 * s, 11 * s);
+    ctx.lineTo(3.5 * s, 6 * s);
+    ctx.closePath();
+    ctx.fill();
+
+    // Legs / claws
+    ctx.fillStyle = '#7a1a9e';
+    ctx.beginPath();
+    ctx.moveTo(-5 * s, 12 * s);
+    ctx.lineTo(-9 * s, 18 * s);
+    ctx.lineTo(-6.5 * s, 17 * s);
+    ctx.lineTo(-8 * s, 22 * s);
+    ctx.lineTo(-3 * s, 14 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(5 * s, 12 * s);
+    ctx.lineTo(9 * s, 18 * s);
+    ctx.lineTo(6.5 * s, 17 * s);
+    ctx.lineTo(8 * s, 22 * s);
+    ctx.lineTo(3 * s, 14 * s);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  // ── Tier 4 bug sprite — green glowing body, blue eyes, orange spikes & legs ──
+  private drawBugSprite(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
+    const s = size / 32;
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // Orange spiky antennae radiating outward (drawn behind body)
+    const spikeAngles = [-80, -55, -30, 30, 55, 80, -110, 110];
+    for (const deg of spikeAngles) {
+      const rad = (deg * Math.PI) / 180;
+      const x1 = Math.cos(rad) * 9 * s,  y1 = Math.sin(rad) * 9 * s;
+      const x2 = Math.cos(rad) * 19 * s, y2 = Math.sin(rad) * 19 * s;
+      ctx.strokeStyle = '#ff8c00';
+      ctx.lineWidth = 2 * s;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      // Tip dot
+      ctx.fillStyle = '#ffcc00';
+      ctx.beginPath();
+      ctx.arc(x2, y2, 2.5 * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Body — glowing green circle
+    ctx.save();
+    ctx.shadowColor = '#00ff88';
+    ctx.shadowBlur = 14;
+    const bodyGrad = ctx.createRadialGradient(-2 * s, -2 * s, 1, 0, 0, 11 * s);
+    bodyGrad.addColorStop(0, '#ccffdd');
+    bodyGrad.addColorStop(0.45, '#22dd66');
+    bodyGrad.addColorStop(1, '#0a4422');
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 11 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Eyes — blue squares
+    ctx.fillStyle = '#3399ff';
+    ctx.fillRect(-7 * s, -5 * s, 5 * s, 5 * s);
+    ctx.fillRect(2 * s,  -5 * s, 5 * s, 5 * s);
+    // Pupils
+    ctx.fillStyle = '#001166';
+    ctx.fillRect(-6 * s, -4 * s, 3 * s, 3 * s);
+    ctx.fillRect(3 * s,  -4 * s, 3 * s, 3 * s);
+
+    // Mouth — orange arc smile
+    ctx.strokeStyle = '#ff8c00';
+    ctx.lineWidth = 1.8 * s;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(0, 4 * s, 4 * s, 0.25, Math.PI - 0.25);
+    ctx.stroke();
+
+    // Spider legs (4 jointed legs at bottom)
+    ctx.strokeStyle = '#ff8c00';
+    ctx.lineWidth = 1.8 * s;
+    ctx.lineCap = 'round';
+    // Front-left
+    ctx.beginPath(); ctx.moveTo(-5 * s, 8 * s); ctx.lineTo(-11 * s, 15 * s); ctx.lineTo(-9 * s, 22 * s); ctx.stroke();
+    // Front-right
+    ctx.beginPath(); ctx.moveTo(5 * s,  8 * s); ctx.lineTo(11 * s,  15 * s); ctx.lineTo(9 * s,  22 * s); ctx.stroke();
+    // Back-left
+    ctx.beginPath(); ctx.moveTo(-8 * s, 5 * s); ctx.lineTo(-16 * s, 10 * s); ctx.lineTo(-14 * s, 17 * s); ctx.stroke();
+    // Back-right
+    ctx.beginPath(); ctx.moveTo(8 * s,  5 * s); ctx.lineTo(16 * s,  10 * s); ctx.lineTo(14 * s,  17 * s); ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // ── Tier 5 jellyfish sprite — cyan glow, angry red eyes, toothed grin, tentacles ─
+  private drawJellyfishSprite(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
+    const s = size / 32;
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // Outer drooping side appendages (behind body)
+    ctx.save();
+    ctx.shadowColor = '#44eeff';
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = '#66ddee';
+    ctx.lineWidth = 3.5 * s;
+    ctx.lineCap = 'round';
+    // Left droop
+    ctx.beginPath();
+    ctx.moveTo(-9 * s, 6 * s);
+    ctx.bezierCurveTo(-14 * s, 12 * s, -16 * s, 18 * s, -12 * s, 26 * s);
+    ctx.stroke();
+    // Right droop
+    ctx.beginPath();
+    ctx.moveTo(9 * s, 6 * s);
+    ctx.bezierCurveTo(14 * s, 12 * s, 16 * s, 18 * s, 12 * s, 26 * s);
+    ctx.stroke();
+    ctx.restore();
+
+    // Inner tentacles (3 thin curling ones)
+    ctx.save();
+    ctx.shadowColor = '#88ffff';
+    ctx.shadowBlur = 5;
+    ctx.strokeStyle = '#aaeeff';
+    ctx.lineWidth = 1.5 * s;
+    ctx.lineCap = 'round';
+    const tentacleDefs = [
+      { x: -4 * s, curl:  3 * s },
+      { x:  0,     curl: -3 * s },
+      { x:  4 * s, curl:  3 * s },
+    ];
+    for (const t of tentacleDefs) {
+      ctx.beginPath();
+      ctx.moveTo(t.x, 9 * s);
+      ctx.bezierCurveTo(t.x + t.curl, 15 * s, t.x - t.curl, 20 * s, t.x + t.curl * 0.5, 28 * s);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Body dome — cyan glow
+    ctx.save();
+    ctx.shadowColor = '#44ddff';
+    ctx.shadowBlur = 18;
+    const bodyGrad = ctx.createRadialGradient(-2 * s, -5 * s, 1, 0, -3 * s, 14 * s);
+    bodyGrad.addColorStop(0, '#eefffe');
+    bodyGrad.addColorStop(0.4, '#77ddee');
+    bodyGrad.addColorStop(1, '#1a6677');
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.arc(0, -2 * s, 13 * s, Math.PI, 0);        // top dome arc
+    ctx.lineTo(13 * s, 7 * s);
+    ctx.quadraticCurveTo(0, 12 * s, -13 * s, 7 * s); // flat-ish bell bottom
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // Eyes — dark angular slanted shape with red glow
+    ctx.fillStyle = '#0d1a22';
+    // Left eye triangle (slants inward ↘)
+    ctx.beginPath();
+    ctx.moveTo(-11 * s, -5 * s);
+    ctx.lineTo(-4 * s,  -2 * s);
+    ctx.lineTo(-4 * s,  -7 * s);
+    ctx.closePath();
+    ctx.fill();
+    // Right eye triangle (slants inward ↙)
+    ctx.beginPath();
+    ctx.moveTo(11 * s, -5 * s);
+    ctx.lineTo(4 * s,  -2 * s);
+    ctx.lineTo(4 * s,  -7 * s);
+    ctx.closePath();
+    ctx.fill();
+    // Red glow pupils
+    ctx.save();
+    ctx.shadowColor = '#ff3333';
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = '#ff5566';
+    ctx.beginPath();
+    ctx.ellipse(-7 * s, -5 * s, 2.2 * s, 2.2 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(7 * s, -5 * s, 2.2 * s, 2.2 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Mouth — wide grin (dark interior)
+    ctx.fillStyle = '#881133';
+    ctx.beginPath();
+    ctx.arc(0, 4 * s, 6 * s, 0.15, Math.PI - 0.15);
+    ctx.fill();
+    // Teeth (5 white rectangles)
+    ctx.fillStyle = '#ffffff';
+    for (let i = -2; i <= 2; i++) {
+      ctx.fillRect(i * 2.4 * s - 1.0 * s, 4 * s, 2.0 * s, 2.8 * s);
+    }
+
+    ctx.restore();
+  }
+
+  // ── Boss #2 — ABDUCTOR (UFO) ─────────────────────────────────────────────────
+  // Dark dome, red glowing eyes, cyan saucer disc, yellow port lights, red tentacles
+  private drawUFOBoss(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
+    const s = 2.2; // boss-scale multiplier
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // Red tentacles — 4 jointed legs below saucer (drawn first, behind body)
+    ctx.strokeStyle = '#dd3311';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'square';
+    // Outer-left
+    ctx.beginPath(); ctx.moveTo(-18 * s, 10 * s); ctx.lineTo(-18 * s, 19 * s); ctx.lineTo(-12 * s, 24 * s); ctx.stroke();
+    // Inner-left
+    ctx.beginPath(); ctx.moveTo(-7 * s,  10 * s); ctx.lineTo(-7 * s,  21 * s); ctx.lineTo(-11 * s, 26 * s); ctx.stroke();
+    // Inner-right
+    ctx.beginPath(); ctx.moveTo(7 * s,   10 * s); ctx.lineTo(7 * s,   21 * s); ctx.lineTo(11 * s,  26 * s); ctx.stroke();
+    // Outer-right
+    ctx.beginPath(); ctx.moveTo(18 * s,  10 * s); ctx.lineTo(18 * s,  19 * s); ctx.lineTo(12 * s,  24 * s); ctx.stroke();
+
+    // Saucer disc — cyan-to-purple gradient, wide ellipse
+    ctx.save();
+    ctx.shadowColor = '#00ccff';
+    ctx.shadowBlur = 22;
+    const discGrad = ctx.createLinearGradient(0, -3 * s, 0, 13 * s);
+    discGrad.addColorStop(0,    '#22eeff');
+    discGrad.addColorStop(0.35, '#1155aa');
+    discGrad.addColorStop(0.70, '#550088');
+    discGrad.addColorStop(1,    '#cc2200');
+    ctx.fillStyle = discGrad;
+    ctx.beginPath();
+    ctx.ellipse(0, 5 * s, 27 * s, 8.5 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Yellow port lights along saucer mid-band
+    ctx.fillStyle = '#ffcc00';
+    for (const px of [-17, -9, 0, 9, 17]) {
+      ctx.fillRect(px * s - 2.5, 4 * s, 5, 5);
+    }
+
+    // Dome — dark interior, cyan outline
+    ctx.save();
+    ctx.shadowColor = '#00ddff';
+    ctx.shadowBlur = 12;
+    const domeGrad = ctx.createRadialGradient(-3 * s, -8 * s, 1, 0, -5 * s, 12 * s);
+    domeGrad.addColorStop(0, '#1e2f55');
+    domeGrad.addColorStop(1, '#040912');
+    ctx.fillStyle = domeGrad;
+    ctx.beginPath();
+    ctx.ellipse(0, -3 * s, 13 * s, 10 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#00eeff';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.restore();
+
+    // Red glowing eyes inside dome
+    ctx.save();
+    ctx.shadowColor = '#ff0000';
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = '#ff1111';
+    ctx.beginPath();
+    ctx.ellipse(-6 * s, -4 * s, 4.5 * s, 3 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(6 * s, -4 * s, 4.5 * s, 3 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Bright pupils
+    ctx.fillStyle = '#ff8888';
+    ctx.beginPath();
+    ctx.ellipse(-6 * s, -4 * s, 2 * s, 1.5 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(6 * s, -4 * s, 2 * s, 1.5 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  // ── Boss #3 — OVERLORD (Robot Skull King) ────────────────────────────────────
+  // Metallic skull, gold crown w/ red gem, glowing red eyes, ear speakers,
+  // left antenna w/ red ball, teeth+jaw, red chin plate, rocket nozzle + flame
+  private drawRobotSkullBoss(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
+    const s = 2.0; // scale multiplier
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // ── Rocket flame (drawn first — behind skull) ─────────────────────────────
+    // Outer yellow flame
+    ctx.save();
+    ctx.shadowColor = '#ffaa00';
+    ctx.shadowBlur  = 20;
+    ctx.fillStyle   = '#ffcc00';
+    ctx.beginPath();
+    ctx.moveTo(-6 * s,  18 * s);
+    ctx.lineTo( 6 * s,  18 * s);
+    ctx.lineTo( 5 * s,  30 * s);
+    ctx.lineTo( 0,      35 * s);
+    ctx.lineTo(-5 * s,  30 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    // Inner orange core
+    ctx.save();
+    ctx.fillStyle = '#ff5500';
+    ctx.beginPath();
+    ctx.moveTo(-3 * s,  18 * s);
+    ctx.lineTo( 3 * s,  18 * s);
+    ctx.lineTo( 1.5 * s, 27 * s);
+    ctx.lineTo( 0,       30 * s);
+    ctx.lineTo(-1.5 * s, 27 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // ── Rocket nozzle ─────────────────────────────────────────────────────────
+    ctx.fillStyle   = '#445566';
+    ctx.strokeStyle = '#778899';
+    ctx.lineWidth   = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-7 * s,  13 * s);
+    ctx.lineTo( 7 * s,  13 * s);
+    ctx.lineTo( 5.5 * s, 19 * s);
+    ctx.lineTo(-5.5 * s, 19 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Nozzle band detail
+    ctx.strokeStyle = '#aabbcc';
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    ctx.moveTo(-6.5 * s, 15.5 * s);
+    ctx.lineTo( 6.5 * s, 15.5 * s);
+    ctx.stroke();
+
+    // ── Main skull head ────────────────────────────────────────────────────────
+    const skullGrad = ctx.createLinearGradient(-12 * s, -14 * s, 8 * s, 14 * s);
+    skullGrad.addColorStop(0,   '#d0d0e8');
+    skullGrad.addColorStop(0.4, '#8888aa');
+    skullGrad.addColorStop(1,   '#3a4a5a');
+    ctx.save();
+    ctx.shadowColor = '#8888bb';
+    ctx.shadowBlur  = 14;
+    ctx.fillStyle   = skullGrad;
+    ctx.beginPath();
+    ctx.moveTo(-12 * s, -14 * s);  // top-left
+    ctx.lineTo( 12 * s, -14 * s);  // top-right
+    ctx.lineTo( 14 * s,  -2 * s);  // right bulge
+    ctx.lineTo( 12 * s,  13 * s);  // jaw-right
+    ctx.lineTo(-12 * s,  13 * s);  // jaw-left
+    ctx.lineTo(-14 * s,  -2 * s);  // left bulge
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    // Skull outline
+    ctx.strokeStyle = '#223344';
+    ctx.lineWidth   = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-12 * s, -14 * s);
+    ctx.lineTo( 12 * s, -14 * s);
+    ctx.lineTo( 14 * s,  -2 * s);
+    ctx.lineTo( 12 * s,  13 * s);
+    ctx.lineTo(-12 * s,  13 * s);
+    ctx.lineTo(-14 * s,  -2 * s);
+    ctx.closePath();
+    ctx.stroke();
+
+    // ── Crown base band ────────────────────────────────────────────────────────
+    ctx.save();
+    ctx.shadowColor = '#ffcc00';
+    ctx.shadowBlur  = 10;
+    ctx.fillStyle   = '#ffd700';
+    ctx.fillRect(-12 * s, -20 * s, 24 * s, 7 * s);
+    ctx.restore();
+    // Crown band outline
+    ctx.strokeStyle = '#aa8800';
+    ctx.lineWidth   = 1;
+    ctx.strokeRect(-12 * s, -20 * s, 24 * s, 7 * s);
+
+    // ── 5 crown spikes ─────────────────────────────────────────────────────────
+    const spikesX = [-10, -5, 0, 5, 10];
+    const spikesH = [  8,  6, 11, 6,  8];
+    ctx.save();
+    ctx.shadowColor = '#ffdd00';
+    ctx.shadowBlur  = 8;
+    ctx.fillStyle   = '#ffd700';
+    for (let i = 0; i < 5; i++) {
+      const px = spikesX[i] * s;
+      ctx.beginPath();
+      ctx.moveTo(px - 3 * s, -20 * s);
+      ctx.lineTo(px,          (-20 - spikesH[i]) * s);
+      ctx.lineTo(px + 3 * s, -20 * s);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+    // Spike outlines
+    ctx.strokeStyle = '#aa8800';
+    ctx.lineWidth   = 1;
+    for (let i = 0; i < 5; i++) {
+      const px = spikesX[i] * s;
+      ctx.beginPath();
+      ctx.moveTo(px - 3 * s, -20 * s);
+      ctx.lineTo(px,          (-20 - spikesH[i]) * s);
+      ctx.lineTo(px + 3 * s, -20 * s);
+      ctx.stroke();
+    }
+
+    // ── Crown gem (red, on tallest center spike) ───────────────────────────────
+    ctx.save();
+    ctx.shadowColor = '#ff0000';
+    ctx.shadowBlur  = 18;
+    ctx.fillStyle   = '#dd0000';
+    ctx.beginPath();
+    ctx.arc(0, (-20 - 11) * s, 3.5 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    // Gem highlight
+    ctx.fillStyle = '#ff9999';
+    ctx.beginPath();
+    ctx.arc(-1 * s, (-20 - 12.5) * s, 1.2 * s, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ── Eye sockets (dark recesses) ────────────────────────────────────────────
+    ctx.fillStyle = '#0d0d22';
+    ctx.beginPath();
+    ctx.ellipse(-6 * s, -5 * s, 5.5 * s, 5 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse( 6 * s, -5 * s, 5.5 * s, 5 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ── Glowing red eyes ───────────────────────────────────────────────────────
+    ctx.save();
+    ctx.shadowColor = '#ff0000';
+    ctx.shadowBlur  = 24;
+    ctx.fillStyle   = '#ff1a00';
+    ctx.beginPath();
+    ctx.ellipse(-6 * s, -5 * s, 3.8 * s, 3.2 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse( 6 * s, -5 * s, 3.8 * s, 3.2 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    // Eye highlights
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(-8 * s, -7 * s, 1.2 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc( 4 * s, -7 * s, 1.2 * s, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ── Ear speakers (left + right) ────────────────────────────────────────────
+    for (const side of [-1, 1]) {
+      const ex = side * 18 * s;
+      const ey = -3 * s;
+      const er = 5.5 * s;
+      // Speaker body
+      ctx.save();
+      ctx.shadowColor = '#cc0000';
+      ctx.shadowBlur  = 10;
+      ctx.fillStyle   = '#aa0000';
+      ctx.beginPath();
+      ctx.arc(ex, ey, er, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      // Grille lines (horizontal, clipped to circle)
+      ctx.strokeStyle = '#440000';
+      ctx.lineWidth   = 1;
+      for (let gy = -3; gy <= 3; gy += 2) {
+        const hw = Math.sqrt(Math.max(0, er * er - (gy * s) * (gy * s)));
+        ctx.beginPath();
+        ctx.moveTo(ex - hw, ey + gy * s);
+        ctx.lineTo(ex + hw, ey + gy * s);
+        ctx.stroke();
+      }
+      // Speaker rim
+      ctx.strokeStyle = '#ff4444';
+      ctx.lineWidth   = 1.5;
+      ctx.beginPath();
+      ctx.arc(ex, ey, er, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // ── Antenna (top-left) ─────────────────────────────────────────────────────
+    ctx.strokeStyle = '#aabbcc';
+    ctx.lineWidth   = 2.5;
+    ctx.lineCap     = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-10 * s, -14 * s);
+    ctx.lineTo(-17 * s, -30 * s);
+    ctx.stroke();
+    // Antenna ball
+    ctx.save();
+    ctx.shadowColor = '#ff2200';
+    ctx.shadowBlur  = 16;
+    ctx.fillStyle   = '#ff3300';
+    ctx.beginPath();
+    ctx.arc(-17 * s, -30 * s, 3.5 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // ── Jaw panel (darker metal) ───────────────────────────────────────────────
+    ctx.fillStyle = '#556677';
+    ctx.beginPath();
+    ctx.moveTo(-11 * s,  5 * s);
+    ctx.lineTo( 11 * s,  5 * s);
+    ctx.lineTo( 12 * s,  13 * s);
+    ctx.lineTo(-12 * s,  13 * s);
+    ctx.closePath();
+    ctx.fill();
+
+    // ── Teeth (6 white rectangles) ─────────────────────────────────────────────
+    ctx.fillStyle = '#dde0ee';
+    const tw = 3 * s;    // tooth width
+    const th = 4.5 * s;  // tooth height
+    const tx = -9 * s;   // leftmost tooth x
+    const tg = 0.6 * s;  // gap between teeth
+    for (let t = 0; t < 6; t++) {
+      ctx.fillRect(tx + t * (tw + tg), 5 * s, tw, th);
+    }
+
+    // ── Red chin plate ─────────────────────────────────────────────────────────
+    ctx.save();
+    ctx.shadowColor = '#cc0000';
+    ctx.shadowBlur  = 8;
+    ctx.fillStyle   = '#bb1111';
+    ctx.beginPath();
+    ctx.moveTo(-11.5 * s, 9.5 * s);
+    ctx.lineTo( 11.5 * s, 9.5 * s);
+    ctx.lineTo( 12 * s,   13 * s);
+    ctx.lineTo(-12 * s,   13 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  // ── Boss #4 — WATCHER (Pixel-art invader eye beast) ──────────────────────────
+  // Classic space-invader silhouette: cyan blocky body, top prongs, wing extensions,
+  // bottom legs, large salmon eye with cross pupil, side pink spots, red wing tips
+  private drawWatcherBoss(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
+    const s = 2.0; // scale multiplier
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // ── Cyan body — all blocks drawn with unified teal glow ───────────────────
+    ctx.save();
+    ctx.shadowColor = '#00ccee';
+    ctx.shadowBlur  = 24;
+    ctx.fillStyle   = '#33bbcc';
+
+    // Top prongs (two narrow rects with gap, tilted slightly outward via extra x offset)
+    ctx.fillRect(-5.5 * s, -21 * s, 3.5 * s, 9 * s);  // left prong
+    ctx.fillRect( 2.0 * s, -21 * s, 3.5 * s, 9 * s);  // right prong
+
+    // Upper shoulder connector
+    ctx.fillRect(-8 * s, -12 * s, 16 * s, 5 * s);
+
+    // Central body block
+    ctx.fillRect(-8 * s,  -7 * s, 16 * s, 14 * s);
+
+    // Wing extensions (horizontal arms)
+    ctx.fillRect(-18 * s, -4.5 * s, 10 * s, 9 * s);  // left wing
+    ctx.fillRect(  8 * s, -4.5 * s, 10 * s, 9 * s);  // right wing
+
+    // Lower connector
+    ctx.fillRect(-8 * s,   7 * s, 16 * s, 5 * s);
+
+    // Bottom legs (two, mirroring the top prongs)
+    ctx.fillRect(-6 * s,  12 * s, 4 * s, 9 * s);   // left leg
+    ctx.fillRect( 2 * s,  12 * s, 4 * s, 9 * s);   // right leg
+
+    ctx.restore();
+
+    // ── Wing tips (hot pink / red accent) ────────────────────────────────────
+    ctx.save();
+    ctx.shadowColor = '#ff4422';
+    ctx.shadowBlur  = 14;
+    ctx.fillStyle   = '#ff5533';
+    ctx.fillRect(-22.5 * s, -3.5 * s, 4.5 * s, 7 * s);  // left tip
+    ctx.fillRect( 18.0 * s, -3.5 * s, 4.5 * s, 7 * s);  // right tip
+    ctx.restore();
+
+    // ── Central eye — outer salmon ring ───────────────────────────────────────
+    ctx.save();
+    ctx.shadowColor = '#ff8866';
+    ctx.shadowBlur  = 20;
+    ctx.fillStyle   = '#ff9977';
+    ctx.beginPath();
+    ctx.arc(0, 0, 7.5 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Eye inner dark sclera
+    ctx.fillStyle = '#0e0018';
+    ctx.beginPath();
+    ctx.arc(0, 0, 5.5 * s, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Cross / + pupil
+    ctx.fillStyle = '#1a0033';
+    ctx.fillRect(-5 * s, -1.5 * s, 10 * s, 3 * s);  // horizontal bar
+    ctx.fillRect(-1.5 * s, -5 * s,  3 * s, 10 * s); // vertical bar
+
+    // Tiny eye highlight (upper-left gleam)
+    ctx.fillStyle = 'rgba(255, 210, 190, 0.50)';
+    ctx.beginPath();
+    ctx.arc(-2.5 * s, -2.5 * s, 2 * s, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ── Side spots (smaller salmon/pink dots) ─────────────────────────────────
+    ctx.save();
+    ctx.shadowColor = '#ff7755';
+    ctx.shadowBlur  = 10;
+    ctx.fillStyle   = '#ff9977';
+    ctx.beginPath();
+    ctx.arc(-11 * s, 0, 2.5 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc( 11 * s, 0, 2.5 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  // ── Planet sprite — NEBULA (purple planet with cyan continent patches) ────────
+  private drawPurplePlanet(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
+    const r = MOON_RADIUS; // 22px
+
+    ctx.save();
+
+    // ── Atmosphere outer glow ────────────────────────────────────────────────────
+    ctx.save();
+    ctx.shadowColor = '#cc44ff';
+    ctx.shadowBlur  = 20;
+
+    // ── Planet base — purple radial gradient ──────────────────────────────────────
+    const grad = ctx.createRadialGradient(
+      cx - r * 0.3, cy - r * 0.3, r * 0.05,   // inner highlight offset
+      cx, cy, r,
+    );
+    grad.addColorStop(0,    '#d080ff');   // bright center highlight
+    grad.addColorStop(0.45, '#8833bb');   // mid purple
+    grad.addColorStop(1,    '#2a0855');   // dark edge
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // ── Cyan continent patches (clipped to planet circle) ─────────────────────────
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+
+    ctx.fillStyle = '#33ccaa';
+    // Patch 1 — upper right
+    ctx.beginPath();
+    ctx.ellipse(cx + r * 0.28, cy - r * 0.28, r * 0.24, r * 0.18, 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    // Patch 2 — lower left (larger)
+    ctx.beginPath();
+    ctx.ellipse(cx - r * 0.28, cy + r * 0.22, r * 0.30, r * 0.22, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+    // Patch 3 — small upper left
+    ctx.beginPath();
+    ctx.ellipse(cx - r * 0.18, cy - r * 0.44, r * 0.13, r * 0.10, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    // Patch 4 — small lower right
+    ctx.beginPath();
+    ctx.ellipse(cx + r * 0.42, cy + r * 0.32, r * 0.12, r * 0.10, -0.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Darker cyan shading on patches (depth)
+    ctx.fillStyle = '#229988';
+    ctx.beginPath();
+    ctx.ellipse(cx + r * 0.30, cy - r * 0.24, r * 0.12, r * 0.09, 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(cx - r * 0.24, cy + r * 0.28, r * 0.16, r * 0.11, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+
+    // ── Atmosphere rim ────────────────────────────────────────────────────────────
+    ctx.save();
+    ctx.shadowColor = '#ee99ff';
+    ctx.shadowBlur  = 8;
+    ctx.strokeStyle = 'rgba(204, 102, 255, 0.45)';
+    ctx.lineWidth   = 3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 1.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    // ── Surface highlight (top-left crescent gleam) ───────────────────────────────
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+    const hlGrad = ctx.createRadialGradient(cx - r * 0.4, cy - r * 0.4, 0, cx - r * 0.35, cy - r * 0.35, r * 0.55);
+    hlGrad.addColorStop(0,   'rgba(255,220,255,0.30)');
+    hlGrad.addColorStop(1,   'rgba(255,220,255,0)');
+    ctx.fillStyle = hlGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  // ── Planet sprite — INFERNO (gas giant: purple base, diagonal orange/amber bands) ──
+  private drawInfernoPlanet(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
+    const r = MOON_RADIUS; // 22px
+
+    ctx.save();
+
+    // ── Outer atmosphere glow (fiery orange) ──────────────────────────────────────
+    ctx.save();
+    ctx.shadowColor = '#ff5500';
+    ctx.shadowBlur  = 18;
+
+    // Planet base — deep purple
+    ctx.fillStyle = '#2a0045';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // ── Diagonal banded atmosphere (clipped to circle) ────────────────────────────
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+
+    // Rotate to create diagonal bands (≈ -28°)
+    ctx.translate(cx, cy);
+    ctx.rotate(-0.50);
+    ctx.translate(-cx, -cy);
+
+    // Band palette — alternating deep purple gaps and orange/amber stripes
+    const bandColors = [
+      '#cc4400',   // dark orange
+      '#ff7700',   // vivid orange
+      '#ffaa00',   // amber
+      '#ff5500',   // orange-red
+      '#ffcc22',   // golden yellow
+      '#dd3300',   // deep red-orange
+    ];
+
+    const bH = r * 0.26;           // band height
+    const startY = cy - r * 1.8;   // start well above (covers rotation overshoot)
+
+    for (let i = 0; i < 14; i++) {
+      const y = startY + i * bH;
+      if (i % 2 === 0) {
+        // Orange band
+        ctx.fillStyle = bandColors[(i / 2) % bandColors.length];
+        ctx.fillRect(cx - r * 2.5, y, r * 5, bH);
+      } else {
+        // Dark purple gap
+        ctx.fillStyle = '#4a0070';
+        ctx.fillRect(cx - r * 2.5, y, r * 5, bH);
+      }
+    }
+
+    // Bright highlight streak across middle
+    ctx.fillStyle = 'rgba(255, 200, 80, 0.30)';
+    ctx.fillRect(cx - r * 2.5, cy - r * 0.35, r * 5, bH * 0.5);
+
+    ctx.restore();
+
+    // ── Magenta / pink edge atmosphere ────────────────────────────────────────────
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+    const edgeGrad = ctx.createRadialGradient(cx, cy, r * 0.55, cx, cy, r);
+    edgeGrad.addColorStop(0,   'rgba(180, 0, 120, 0)');
+    edgeGrad.addColorStop(0.7, 'rgba(180, 0, 120, 0)');
+    edgeGrad.addColorStop(1,   'rgba(220, 40, 160, 0.65)');
+    ctx.fillStyle = edgeGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // ── Surface crescent highlight ─────────────────────────────────────────────────
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+    const hlGrad = ctx.createRadialGradient(cx - r * 0.38, cy - r * 0.38, 0, cx - r * 0.32, cy - r * 0.32, r * 0.60);
+    hlGrad.addColorStop(0,  'rgba(255, 220, 120, 0.28)');
+    hlGrad.addColorStop(1,  'rgba(255, 220, 120, 0)');
+    ctx.fillStyle = hlGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // ── Atmosphere rim ────────────────────────────────────────────────────────────
+    ctx.save();
+    ctx.shadowColor = '#ff4400';
+    ctx.shadowBlur  = 10;
+    ctx.strokeStyle = 'rgba(255, 90, 0, 0.55)';
+    ctx.lineWidth   = 2.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 1.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  // ── Planet sprite — SATURN (cyan gas giant with neon magenta ring) ─────────────
+  // Ring is split: back arc drawn first, planet body on top, front arc drawn last
+  private drawSaturnPlanet(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
+    const r      = MOON_RADIUS; // 22px
+    const tilt   = -0.55;       // ring tilt ≈ -31°
+    const ringRx = r * 1.82;    // ring x-radius in tilted frame
+    const ringRy = r * 0.40;    // ring y-radius (flat perspective)
+    const ringW  = 8;           // ring stroke thickness
+
+    ctx.save();
+
+    // ── Back ring arc (upper half in tilted frame → goes behind planet top) ──────
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(tilt);
+    ctx.save();
+    ctx.shadowColor = '#bb00ee';
+    ctx.shadowBlur  = 12;
+    ctx.strokeStyle = '#aa00cc';
+    ctx.lineWidth   = ringW;
+    ctx.lineCap     = 'butt';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, ringRx, ringRy, 0, Math.PI, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+
+    // ── Planet body ───────────────────────────────────────────────────────────────
+    ctx.save();
+    ctx.shadowColor = '#00ccff';
+    ctx.shadowBlur  = 18;
+
+    // Radial gradient base (bright cyan highlight → deep blue edge)
+    const grad = ctx.createRadialGradient(cx - r * 0.28, cy - r * 0.28, r * 0.04, cx, cy, r);
+    grad.addColorStop(0,    '#88eeff');  // bright highlight
+    grad.addColorStop(0.40, '#00bbdd');  // mid cyan
+    grad.addColorStop(1,    '#002255');  // dark edge
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Horizontal atmosphere bands (clipped to circle)
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+    const bands: { yOff: number; h: number; col: string }[] = [
+      { yOff: -0.90, h: 0.26, col: '#66ddee' },
+      { yOff: -0.64, h: 0.22, col: '#007799' },
+      { yOff: -0.42, h: 0.28, col: '#44ccdd' },
+      { yOff: -0.14, h: 0.26, col: '#005f88' },
+      { yOff:  0.12, h: 0.28, col: '#55ddee' },
+      { yOff:  0.40, h: 0.28, col: '#004466' },
+      { yOff:  0.68, h: 0.32, col: '#33bbcc' },
+    ];
+    for (const b of bands) {
+      ctx.fillStyle = b.col;
+      ctx.fillRect(cx - r * 1.5, cy + b.yOff * r, r * 3, b.h * r);
+    }
+    // Top-left crescent gleam
+    const hl = ctx.createRadialGradient(cx - r * 0.32, cy - r * 0.32, 0, cx - r * 0.28, cy - r * 0.28, r * 0.58);
+    hl.addColorStop(0,  'rgba(200, 255, 255, 0.32)');
+    hl.addColorStop(1,  'rgba(200, 255, 255, 0)');
+    ctx.fillStyle = hl;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // ── Front ring arc (lower half in tilted frame → in front of planet bottom) ──
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(tilt);
+    ctx.save();
+    ctx.shadowColor = '#ee44ff';
+    ctx.shadowBlur  = 14;
+    // Outer bright magenta
+    ctx.strokeStyle = '#cc22ff';
+    ctx.lineWidth   = ringW;
+    ctx.lineCap     = 'butt';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, ringRx, ringRy, 0, 0, Math.PI);
+    ctx.stroke();
+    // Inner darker purple edge (depth)
+    ctx.strokeStyle = '#770099';
+    ctx.lineWidth   = 2.5;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, ringRx - ringW * 0.45, ringRy - 2, 0, 0, Math.PI);
+    ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+
+    ctx.restore();
   }
 }

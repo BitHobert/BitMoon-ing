@@ -18,22 +18,24 @@ export const MOON_Y_LANE = 0.35;  // fraction of canvas height
 export const MOON_RADIUS = 22;    // collision radius px
 
 export interface PlanetConfig {
-  readonly glyph:   string;
-  readonly penalty: number;  // points lost if enemy destroys it
-  readonly label:   string;  // shown in HUD hint
+  readonly glyph:    string;
+  readonly penalty:  number;   // points lost if enemy destroys it
+  readonly label:    string;   // shown in HUD hint
+  readonly spriteId?: string;  // if set, use custom canvas draw instead of emoji
 }
 
 export const PLANET_POOL: PlanetConfig[] = [
   { glyph: '🌕', penalty: 10_000, label: 'MOON'      },
-  { glyph: '🌍', penalty: 15_000, label: 'EARTH'     },
-  { glyph: '🌎', penalty: 15_000, label: 'EARTH'     },
+  { glyph: '🌍', penalty: 15_000, label: 'NEBULA',    spriteId: 'purple' },
+  { glyph: '🌎', penalty: 15_000, label: 'INFERNO',   spriteId: 'inferno' },
   { glyph: '🌏', penalty: 15_000, label: 'EARTH'     },
-  { glyph: '🪐', penalty: 20_000, label: 'SATURN'    },
+  { glyph: '🪐', penalty: 20_000, label: 'SATURN',    spriteId: 'saturn' },
   { glyph: '🌑', penalty:  5_000, label: 'DARK MOON' },
 ];
 
 export function randomPlanet(): PlanetConfig {
-  return PLANET_POOL[Math.floor(Math.random() * PLANET_POOL.length)];
+  return PLANET_POOL[4]; // TEMP: always show SATURN for visual check
+  // return PLANET_POOL[Math.floor(Math.random() * PLANET_POOL.length)];
 }
 
 // ── Enemy tiers ───────────────────────────────────────────────────────────────
@@ -87,15 +89,53 @@ export const BOSS_POOL: BossConfig[] = [
     bulletSpread: 1,
     duration:     1200,   // 20 s at 60 fps
   },
+  {
+    name:         'ABDUCTOR',
+    glyph:        '🛸',        // fallback only — custom sprite used in render
+    fontSize:     64,
+    hp:           80,
+    points:       40_000,
+    burnUnits:    200_000_000_000n,
+    speed:        2.0,
+    fireRate:     28,
+    bulletSpread: 1,
+    duration:     1200,
+  },
+  {
+    name:         'OVERLORD',
+    glyph:        '💀',        // fallback only — custom sprite used in render
+    fontSize:     64,
+    hp:           100,
+    points:       60_000,
+    burnUnits:    300_000_000_000n,
+    speed:        2.2,
+    fireRate:     22,
+    bulletSpread: 1,
+    duration:     1200,
+  },
+  {
+    name:         'WATCHER',
+    glyph:        '👁',         // fallback only — custom sprite used in render
+    fontSize:     64,
+    hp:           120,
+    points:       80_000,
+    burnUnits:    400_000_000_000n,
+    speed:        2.4,
+    fireRate:     18,
+    bulletSpread: 2,
+    duration:     1200,
+  },
   // Add more bosses here — they cycle every 5 waves
 ];
 
-export function isBossWave(waveNum: number): boolean {
-  return waveNum % 5 === 0;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function isBossWave(_waveNum: number): boolean {
+  return false; // TEMP: disable boss wave to preview planets
 }
 
-export function getBossIndex(waveNum: number): number {
-  return (Math.floor(waveNum / 5) - 1) % BOSS_POOL.length;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function getBossIndex(_waveNum: number): number {
+  return 3; // TEMP: show boss #4 (WATCHER)
 }
 
 export function getBossConfig(waveNum: number): BossConfig {
@@ -116,7 +156,7 @@ export interface PowerupConfig {
 
 export const POWERUP_CONFIGS: Record<PowerupKind, PowerupConfig> = {
   weapon: { kind: 'weapon', glyph: '⚡', label: 'WEAPON BOOST', dropChance: 0.15, duration: 480 }, // 8 s
-  shield: { kind: 'shield', glyph: '🛡', label: 'SHIELD',       dropChance: 0.10, duration: 0   }, // one-shot
+  shield: { kind: 'shield', glyph: '💊', label: 'SHIELD',       dropChance: 0.10, duration: 0   }, // one-shot
 };
 
 // ── Wave configuration ────────────────────────────────────────────────────────
