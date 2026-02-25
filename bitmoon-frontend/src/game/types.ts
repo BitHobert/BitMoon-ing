@@ -39,12 +39,13 @@ export interface BossEntity {
   x: number;
   y: number;
   vx: number;                // lateral velocity (bounces at screen edges)
-  hp: number;
-  maxHp: number;
+  hp: number;                // current HP (persists between encounters)
+  maxHp: number;             // original full HP (from BossConfig.hp)
   alive: boolean;
   flashFrames: number;       // hit flash countdown
   fireTimer: number;         // frames until next shot
   phase: number;             // sine phase for Y oscillation
+  poolIndex: number;         // index into BOSS_POOL (for HP persistence)
   cfg: BossConfig;
 }
 

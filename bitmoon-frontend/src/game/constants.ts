@@ -65,12 +65,13 @@ export interface BossConfig {
   readonly name:         string;
   readonly glyph:        string;
   readonly fontSize:     number;   // px — larger than regular 22px enemies
-  readonly hp:           number;
-  readonly points:       number;
+  readonly hp:           number;   // full HP pool (shared across all encounters)
+  readonly points:       number;   // points awarded on kill
   readonly burnUnits:    bigint;
   readonly speed:        number;   // lateral patrol speed px/frame
   readonly fireRate:     number;   // frames between shots
   readonly bulletSpread: number;   // bullets per shot (spread fan)
+  readonly duration:     number;   // frames before retreat if still alive
 }
 
 export const BOSS_POOL: BossConfig[] = [
@@ -84,6 +85,7 @@ export const BOSS_POOL: BossConfig[] = [
     speed:        1.8,
     fireRate:     35,
     bulletSpread: 1,
+    duration:     1200,   // 20 s at 60 fps
   },
   // Add more bosses here — they cycle every 5 waves
 ];
@@ -92,9 +94,12 @@ export function isBossWave(waveNum: number): boolean {
   return waveNum % 5 === 0;
 }
 
+export function getBossIndex(waveNum: number): number {
+  return (Math.floor(waveNum / 5) - 1) % BOSS_POOL.length;
+}
+
 export function getBossConfig(waveNum: number): BossConfig {
-  const idx = (Math.floor(waveNum / 5) - 1) % BOSS_POOL.length;
-  return BOSS_POOL[idx];
+  return BOSS_POOL[getBossIndex(waveNum)];
 }
 
 // ── Powerups ──────────────────────────────────────────────────────────────────

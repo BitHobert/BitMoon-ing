@@ -4,7 +4,7 @@ import {
   PLAYER_SPEED, PLAYER_LIVES, PLAYER_INVINCIBLE, PLAYER_SIZE, PLAYER_SHOOT_RATE, BULLET_SPEED,
   MOON_SPEED, MOON_Y_LANE, MOON_RADIUS,
   TIER_CONFIGS, BASE_ENEMY_SPEED,
-  buildWave, isBossWave, getBossConfig, randomPlanet,
+  buildWave, isBossWave, getBossConfig, getBossIndex, randomPlanet,
   POWERUP_CONFIGS,
 } from './constants';
 import type { PlanetConfig } from './constants';
@@ -26,6 +26,8 @@ export class GameEngine {
   private state:    GameState;
   private events:   GameEvent[] = [];
   private rafId:    number | null = null;
+  // Persistent boss HP: survives between boss waves — key = BOSS_POOL index
+  private readonly bossHpPool = new Map<number, number>();
   private readonly boundKeyDown: (e: KeyboardEvent) => void;
   private readonly boundKeyUp:   (e: KeyboardEvent) => void;
 
@@ -124,17 +126,21 @@ export class GameEngine {
       s.currentPlanet = null;
       this.cbs.onPlanet(null);
 
-      const cfg = getBossConfig(waveNum);
+      const poolIndex = getBossIndex(waveNum);
+      const cfg       = getBossConfig(waveNum);
+      // Start with persisted HP (or full HP if first encounter / previously killed)
+      const startHp   = this.bossHpPool.get(poolIndex) ?? cfg.hp;
       s.boss = {
         x:           -80,
         y:           CANVAS_H / 2,
         vx:          cfg.speed,
-        hp:          cfg.hp,
-        maxHp:       cfg.hp,
+        hp:          startHp,
+        maxHp:       cfg.hp,        // always the original max for the bar
         alive:       true,
         flashFrames: 0,
         fireTimer:   cfg.fireRate,
         phase:       0,
+        poolIndex,
         cfg,
       };
     } else {
@@ -353,11 +359,18 @@ export class GameEngine {
     if (!s.boss || !s.boss.alive) return;
     const boss = s.boss;
 
-    // Enrage at <20% HP: speed doubles
-    const enrage = boss.hp / boss.maxHp < 0.2 ? 2 : 1;
+    // Time-based retreat: boss leaves after cfg.duration frames
+    const elapsed = s.tick - s.spawnTick;
+    if (elapsed >= boss.cfg.duration) {
+      // Save current HP so the next encounter continues from here
+      this.bossHpPool.set(boss.poolIndex, boss.hp);
+      boss.alive = false;
+      this.spawnExplosion(boss.x, boss.y, '#888');
+      return;
+    }
 
-    // Lateral patrol: bounce between 100 ↔ CANVAS_W - 100
-    boss.x += boss.vx * enrage;
+    // Lateral patrol: bounce between 100 ↔ CANVAS_W - 100 (no enrage)
+    boss.x += boss.vx;
     if (boss.x >= CANVAS_W - 100) { boss.x = CANVAS_W - 100; boss.vx = -boss.cfg.speed; }
     if (boss.x <= 100)            { boss.x = 100;             boss.vx =  boss.cfg.speed; }
 
@@ -472,6 +485,8 @@ export class GameEngine {
 
         if (s.boss.hp <= 0) {
           s.boss.alive = false;
+          // Reset persisted HP — next encounter starts fresh
+          this.bossHpPool.delete(s.boss.poolIndex);
           const pts = Math.round(s.boss.cfg.points * this.scarcityMultiplier);
           s.score += pts;
           s.kills++;
@@ -732,19 +747,24 @@ export class GameEngine {
       ctx.globalAlpha = 1;
 
       // Boss HP bar — full-width, top of canvas
-      const barY = 6, barH = 12;
+      const barY = 6, barH = 14;
       const hpFrac = boss.hp / boss.maxHp;
-      ctx.fillStyle = 'rgba(0,0,0,0.75)';
+      ctx.fillStyle = 'rgba(0,0,0,0.80)';
       ctx.fillRect(0, barY, W, barH);
       const barColor = hpFrac > 0.5 ? '#f7931a' : hpFrac > 0.25 ? '#e67e22' : '#e74c3c';
       ctx.fillStyle = barColor;
       ctx.fillRect(0, barY, W * hpFrac, barH);
-      // Boss name + HP label
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      // Label: name · HP · retreat countdown
+      const framesLeft  = Math.max(0, boss.cfg.duration - (s.tick - s.spawnTick));
+      const secsLeft    = Math.ceil(framesLeft / 60);
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
       ctx.font = '6px "Press Start 2P", monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(`⚡ ${boss.cfg.name}  ${boss.hp} / ${boss.maxHp} HP`, W / 2, barY + barH / 2 + 0.5);
+      ctx.fillText(
+        `⚡ ${boss.cfg.name}   HP ${boss.hp} / ${boss.maxHp}   |   RETREATS IN ${secsLeft}s`,
+        W / 2, barY + barH / 2 + 0.5,
+      );
 
       // "⚠ BOSS WAVE" warning — first 120 frames
       const bossAge = s.tick - s.spawnTick;
