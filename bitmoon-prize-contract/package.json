@@ -3,8 +3,11 @@
     "version": "0.0.1",
     "description": "BitMoon prize distribution smart contract for OPNet",
     "private": true,
+    "type": "module",
     "scripts": {
-        "build": "asc src/index.ts --target release --measure --uncheckedBehavior never"
+        "build": "asc src/index.ts --target release --measure --uncheckedBehavior never",
+        "keygen": "tsx --tsconfig tsconfig.scripts.json scripts/keygen.ts",
+        "deploy": "tsx --tsconfig tsconfig.scripts.json scripts/deploy.ts"
     },
     "dependencies": {
         "@btc-vision/as-bignum": "^0.0.5",
@@ -14,6 +17,7 @@
     },
     "devDependencies": {
         "assemblyscript": "^0.28.4",
+        "tsx": "^4.21.0",
         "typescript": "^5.9.2"
     }
 }
