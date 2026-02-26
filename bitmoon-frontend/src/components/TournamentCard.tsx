@@ -27,16 +27,24 @@ interface Props {
   info: TournamentInfo;
   navigate: NavigateFn;
   currentBlock?: bigint;
+  /** Connected player's rank in this tournament, if entered. */
+  playerRank?: number | null;
 }
 
-export function TournamentCard({ info, navigate, currentBlock }: Props) {
-  const color = TYPE_COLORS[info.tournamentType];
+export function TournamentCard({ info, navigate, currentBlock, playerRank }: Props) {
+  const color        = TYPE_COLORS[info.tournamentType];
   const prizeDisplay = formatTokens(info.prizePool);
   const feeDisplay   = formatTokens(info.entryFee);
 
   const blocksLeft = currentBlock !== undefined
     ? Math.max(0, Number(BigInt(info.endsAtBlock) - currentBlock))
     : null;
+
+  // Prize split: 1st 50 % · 2nd 30 % · 3rd 20 %
+  const pool   = BigInt(info.prizePool);
+  const prize1 = formatTokens((pool * 50n / 100n).toString());
+  const prize2 = formatTokens((pool * 30n / 100n).toString());
+  const prize3 = formatTokens((pool * 20n / 100n).toString());
 
   return (
     <div className="card" style={{
@@ -49,12 +57,27 @@ export function TournamentCard({ info, navigate, currentBlock }: Props) {
       gap: 12,
     }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span className="pixel" style={{ fontSize: 11, color }}>{TYPE_LABELS[info.tournamentType]}</span>
-        {info.isActive
-          ? <span style={{ fontSize: 9, color: 'var(--color-green)', fontFamily: 'var(--font-pixel)' }}>● LIVE</span>
-          : <span style={{ fontSize: 9, color: 'var(--color-text-dim)', fontFamily: 'var(--font-pixel)' }}>INACTIVE</span>
-        }
+        <span style={{ marginLeft: 'auto' }}>
+          {info.isActive
+            ? <span style={{ fontSize: 9, color: 'var(--color-green)', fontFamily: 'var(--font-pixel)' }}>● LIVE</span>
+            : <span style={{ fontSize: 9, color: 'var(--color-text-dim)', fontFamily: 'var(--font-pixel)' }}>INACTIVE</span>
+          }
+        </span>
+        {playerRank != null && (
+          <span style={{
+            fontSize: 8,
+            fontFamily: 'var(--font-pixel)',
+            color: '#000',
+            background: color,
+            padding: '2px 6px',
+            borderRadius: 2,
+            whiteSpace: 'nowrap',
+          }}>
+            #{playerRank}
+          </span>
+        )}
       </div>
 
       {/* Prize pool */}
@@ -82,6 +105,21 @@ export function TournamentCard({ info, navigate, currentBlock }: Props) {
             <div>BLOCKS LEFT</div>
           </div>
         )}
+      </div>
+
+      {/* Prize breakdown */}
+      <div style={{
+        display: 'flex', gap: 8,
+        fontSize: 8, fontFamily: 'var(--font-pixel)',
+        color: 'var(--color-text-dim)',
+        background: 'var(--color-bg)',
+        borderRadius: 4,
+        padding: '6px 8px',
+        flexWrap: 'wrap',
+      }}>
+        <span>🥇 {prize1}</span>
+        <span>🥈 {prize2}</span>
+        <span>🥉 {prize3}</span>
       </div>
 
       {/* Buttons */}

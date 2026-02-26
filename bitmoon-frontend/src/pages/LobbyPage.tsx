@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import type { NavigateFn } from '../App';
-import { getTournaments } from '../api/http';
-import type { TournamentInfo } from '../types';
+import { getTournaments, getTournamentLeaderboard } from '../api/http';
+import type { TournamentInfo, TournamentType } from '../types';
 import { WalletButton } from '../components/WalletButton';
 import { SupplyMeter } from '../components/SupplyMeter';
 import { TournamentCard } from '../components/TournamentCard';
+import { TournamentLeaderboard } from '../components/TournamentLeaderboard';
 import { LeaderboardTable } from '../components/LeaderboardTable';
 import { PlayerCard } from '../components/PlayerCard';
 import { PastWinnersModal } from '../components/PastWinnersModal';
@@ -18,12 +19,38 @@ export function LobbyPage({ navigate }: Props) {
   const { supply }  = useWsContext();
   const [tournaments,  setTournaments]  = useState<TournamentInfo[]>([]);
   const [showWinners,  setShowWinners]  = useState(false);
+  const [playerRanks,  setPlayerRanks]  = useState<Partial<Record<TournamentType, number | null>>>({});
+  const [prizePools,   setPrizePools]   = useState<Partial<Record<TournamentType, string>>>({});
 
   useEffect(() => {
     getTournaments()
-      .then((r) => setTournaments(r.tournaments))
+      .then(async (r) => {
+        setTournaments(r.tournaments);
+
+        // Build prize pool map for TournamentLeaderboard payout display
+        const pools: Partial<Record<TournamentType, string>> = {};
+        r.tournaments.forEach(t => { pools[t.tournamentType] = t.prizePool; });
+        setPrizePools(pools);
+
+        // Fetch tournament leaderboards in parallel to find the player's rank
+        if (!address) return;
+        const lbs = await Promise.all(
+          r.tournaments.map(t =>
+            getTournamentLeaderboard(t.tournamentType, 200).catch(() => null)
+          )
+        );
+        const ranks: Partial<Record<TournamentType, number | null>> = {};
+        lbs.forEach((lb, i) => {
+          if (!lb) return;
+          const entry = lb.entries.find(
+            e => e.playerAddress.toLowerCase() === address.toLowerCase()
+          );
+          ranks[r.tournaments[i].tournamentType] = entry?.rank ?? null;
+        });
+        setPlayerRanks(ranks);
+      })
       .catch(console.error);
-  }, []);
+  }, [address]); // re-run when wallet connects so rank badge appears immediately
 
   // Use supply sequenceNumber as rough block proxy for display only
   const currentBlock = supply ? BigInt(supply.sequenceNumber) : undefined;
@@ -82,13 +109,21 @@ export function LobbyPage({ navigate }: Props) {
                   info={t}
                   navigate={navigate}
                   currentBlock={currentBlock}
+                  playerRank={playerRanks[t.tournamentType]}
                 />
               ))}
             </div>
           </section>
         )}
 
-        {/* Leaderboard + player stats */}
+        {/* Tournament live rankings */}
+        {tournaments.length > 0 && (
+          <section style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            <TournamentLeaderboard prizePools={prizePools} />
+          </section>
+        )}
+
+        {/* Global leaderboard + player stats */}
         <section style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div style={{ flex: 1, minWidth: 280 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
