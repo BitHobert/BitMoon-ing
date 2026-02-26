@@ -9,6 +9,7 @@ import {
 } from './constants';
 import type { PlanetConfig } from './constants';
 import type { GameState, GameCallbacks, EnemyEntity, ParticleEntity, PowerupEntity } from './types';
+import type { AudioEngine } from './AudioEngine';
 
 // ── Key state ─────────────────────────────────────────────────────────────────
 const KEYS = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false,
@@ -32,6 +33,8 @@ export class GameEngine {
   private readonly boundKeyUp:   (e: KeyboardEvent) => void;
   // PNG sprite cache — keyed by path under /public (e.g. 'sprites/enemy3.png')
   private readonly sprites = new Map<string, HTMLImageElement>();
+  // Optional audio engine — set by GameCanvas after construction
+  public audio?: AudioEngine;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -161,6 +164,7 @@ export class GameEngine {
         cfg,
         trail:       [],
       };
+      this.audio?.playBossSpawn();
     } else {
       // Regular wave: random planet to protect
       const planet    = randomPlanet();
@@ -328,6 +332,7 @@ export class GameEngine {
         fromPlayer: true,
       });
     }
+    this.audio?.playShoot();
     // Weapon boost halves the cooldown (faster firing)
     s.shootCooldown = boosted ? Math.ceil(PLAYER_SHOOT_RATE / 2) : PLAYER_SHOOT_RATE;
   }
@@ -471,6 +476,7 @@ export class GameEngine {
         e.hp--;
         e.flashFrames = 8;
         s.bullets.splice(bi, 1);
+        if (e.hp > 0) this.audio?.playEnemyHit();
 
         if (e.hp <= 0) {
           e.alive = false;
@@ -479,6 +485,7 @@ export class GameEngine {
           s.kills++;
           s.burned += e.cfg.burnUnits;
           this.spawnExplosion(e.x, e.y, TIER_COLORS[e.tier]);
+          this.audio?.playEnemyKill();
           this.events.push({ tick: s.tick, type: 'kill', tier: e.tier, wave: s.wave });
           this.cbs.onScore(s.score);
           this.cbs.onKill(e.tier, pts, this.scarcityMultiplier);
@@ -501,6 +508,7 @@ export class GameEngine {
         s.boss.hp--;
         s.boss.flashFrames = 8;
         s.bullets.splice(bi, 1);
+        if (s.boss.hp > 0) this.audio?.playBossHit();
 
         if (s.boss.hp <= 0) {
           s.boss.alive = false;
@@ -514,6 +522,7 @@ export class GameEngine {
           this.spawnExplosion(s.boss.x,      s.boss.y,      '#ff4500');
           this.spawnExplosion(s.boss.x + 25, s.boss.y - 25, '#ffd700');
           this.spawnExplosion(s.boss.x - 25, s.boss.y + 25, '#ff4500');
+          this.audio?.playBossKill();
           this.events.push({ tick: s.tick, type: 'kill', tier: 5, wave: s.wave });
           this.cbs.onScore(s.score);
           this.cbs.onKill(5, pts, this.scarcityMultiplier);
@@ -559,6 +568,7 @@ export class GameEngine {
       if (Math.sqrt(dx * dx + dy * dy) < PLAYER_SIZE + 16) {
         s.powerups.splice(i, 1);
         this.applyPowerup(pu.kind);
+        this.audio?.playPowerupPickup();
       }
     }
 
@@ -581,12 +591,14 @@ export class GameEngine {
                 '#00d4ff',
               );
             }
+            this.audio?.playPlanetShieldHit();
           } else {
             // No shield — normal destruction
             s.moon.alive = false;
             s.score = Math.max(0, s.score - s.moon.penalty);
             this.spawnExplosion(s.moon.x, s.moon.y, '#ffd700');
             this.spawnExplosion(s.moon.x, s.moon.y, '#ffd700');
+            this.audio?.playPlanetDestroyed();
             this.events.push({ tick: s.tick, type: 'miss', wave: s.wave });
             this.cbs.onScore(s.score);
           }
@@ -652,17 +664,20 @@ export class GameEngine {
       s.shieldActive = false;
       s.player.invincibleFrames = PLAYER_INVINCIBLE;
       this.spawnExplosion(s.player.x, s.player.y, '#00d4ff'); // blue flash
+      this.audio?.playShieldBlock();
       this.cbs.onPowerup(null, s.weaponFrames, false);
       return;
     }
     s.player.lives--;
     s.player.invincibleFrames = PLAYER_INVINCIBLE;
     this.spawnExplosion(s.player.x, s.player.y, '#f7931a');
+    this.audio?.playPlayerHit();
     this.events.push({ tick: s.tick, type: 'player_death', wave: s.wave });
     this.cbs.onLives(s.player.lives);
     if (s.player.lives <= 0) {
       s.phase = 'game_over';
       this.cbs.onGameOver(s.score, s.burned);
+      this.audio?.playGameOver();
     }
   }
 
@@ -681,6 +696,7 @@ export class GameEngine {
       this.events.push({ tick: s.tick, type: 'wave_clear', wave: s.wave });
       s.phase     = 'wave_clear';
       s.spawnTick = s.tick;
+      this.audio?.playWaveClear();
     }
   }
 
