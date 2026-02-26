@@ -34,8 +34,7 @@ export const PLANET_POOL: PlanetConfig[] = [
 ];
 
 export function randomPlanet(): PlanetConfig {
-  return PLANET_POOL[4]; // TEMP: always show SATURN for visual check
-  // return PLANET_POOL[Math.floor(Math.random() * PLANET_POOL.length)];
+  return PLANET_POOL[Math.floor(Math.random() * PLANET_POOL.length)];
 }
 
 // ── Enemy tiers ───────────────────────────────────────────────────────────────
@@ -128,14 +127,12 @@ export const BOSS_POOL: BossConfig[] = [
   // Add more bosses here — they cycle every 5 waves
 ];
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function isBossWave(_waveNum: number): boolean {
-  return false; // TEMP: disable boss wave to preview planets
+export function isBossWave(waveNum: number): boolean {
+  return waveNum % 5 === 0;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function getBossIndex(_waveNum: number): number {
-  return 3; // TEMP: show boss #4 (WATCHER)
+export function getBossIndex(waveNum: number): number {
+  return ((waveNum / 5) - 1) % BOSS_POOL.length | 0;
 }
 
 export function getBossConfig(waveNum: number): BossConfig {
