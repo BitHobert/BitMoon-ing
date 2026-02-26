@@ -34,6 +34,7 @@ export interface MoonEntity {
   glyph: string;             // which planet emoji (🌕 🌍 🌎 🌏 🪐 🌑)
   penalty: number;           // points lost if destroyed
   spriteId?: string;         // if set, use custom canvas draw instead of emoji
+  moonShield: boolean;       // true = shield active, absorbs next enemy hit
 }
 
 export interface BossEntity {

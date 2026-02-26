@@ -25,12 +25,12 @@ export interface PlanetConfig {
 }
 
 export const PLANET_POOL: PlanetConfig[] = [
-  { glyph: '🌕', penalty: 10_000, label: 'MOON'      },
-  { glyph: '🌍', penalty: 15_000, label: 'NEBULA',    spriteId: 'purple' },
+  { glyph: '🌕', penalty:  7_000, label: 'MOON'      },
+  { glyph: '🌍', penalty: 10_000, label: 'NEBULA',    spriteId: 'purple' },
   { glyph: '🌎', penalty: 15_000, label: 'INFERNO',   spriteId: 'inferno' },
-  { glyph: '🌏', penalty: 15_000, label: 'EARTH'     },
-  { glyph: '🪐', penalty: 20_000, label: 'SATURN',    spriteId: 'saturn' },
-  { glyph: '🌑', penalty:  5_000, label: 'DARK MOON' },
+  { glyph: '🌏', penalty: 20_000, label: 'EARTH'     },
+  { glyph: '🪐', penalty: 25_000, label: 'SATURN',    spriteId: 'saturn' },
+  { glyph: '🌑', penalty: 40_000, label: 'DARK MOON' },
 ];
 
 export function randomPlanet(): PlanetConfig {

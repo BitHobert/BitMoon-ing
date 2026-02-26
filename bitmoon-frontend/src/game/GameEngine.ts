@@ -210,13 +210,14 @@ export class GameEngine {
     if (!s.moonSpawned && s.nextSpawns.length > 0 && elapsedTicks >= s.nextSpawns[0].delayFrames + 30) {
       const planet = s.currentPlanet;
       s.moon = {
-        x:           -MOON_RADIUS * 2,
+        x:           CANVAS_W + MOON_RADIUS * 2,
         y:           CANVAS_H * MOON_Y_LANE,
         alive:       true,
         flashFrames: 0,
         glyph:       planet?.glyph    ?? '🌕',
         penalty:     planet?.penalty  ?? 10_000,
         spriteId:    planet?.spriteId,
+        moonShield:  true,
       };
       s.moonSpawned = true;
     }
@@ -349,9 +350,9 @@ export class GameEngine {
   private moveMoon(): void {
     const s = this.state;
     if (!s.moon || !s.moon.alive) return;
-    s.moon.x += MOON_SPEED;
+    s.moon.x -= MOON_SPEED;
     if (s.moon.flashFrames > 0) s.moon.flashFrames--;
-    if (s.moon.x > CANVAS_W + MOON_RADIUS * 2) s.moon = null;
+    if (s.moon.x < -MOON_RADIUS * 2) s.moon = null;
   }
 
   // ── Boss movement (patrol + sine Y) ──────────────────────────────────────────
@@ -551,12 +552,27 @@ export class GameEngine {
         const dx = e.x - s.moon.x;
         const dy = e.y - s.moon.y;
         if (Math.sqrt(dx * dx + dy * dy) < MOON_RADIUS + 16) {
-          s.moon.alive = false;
-          s.score = Math.max(0, s.score - s.moon.penalty);  // use per-planet penalty
-          this.spawnExplosion(s.moon.x, s.moon.y, '#ffd700');
-          this.spawnExplosion(s.moon.x, s.moon.y, '#ffd700');
-          this.events.push({ tick: s.tick, type: 'miss', wave: s.wave });
-          this.cbs.onScore(s.score);
+          if (s.moon.moonShield) {
+            // Shield absorbs the hit — break it with a burst of cyan explosions
+            s.moon.moonShield  = false;
+            s.moon.flashFrames = 80;
+            for (let i = 0; i < 8; i++) {
+              const a = (i / 8) * Math.PI * 2;
+              this.spawnExplosion(
+                s.moon.x + Math.cos(a) * (MOON_RADIUS + 10),
+                s.moon.y + Math.sin(a) * (MOON_RADIUS + 10),
+                '#00d4ff',
+              );
+            }
+          } else {
+            // No shield — normal destruction
+            s.moon.alive = false;
+            s.score = Math.max(0, s.score - s.moon.penalty);
+            this.spawnExplosion(s.moon.x, s.moon.y, '#ffd700');
+            this.spawnExplosion(s.moon.x, s.moon.y, '#ffd700');
+            this.events.push({ tick: s.tick, type: 'miss', wave: s.wave });
+            this.cbs.onScore(s.score);
+          }
           e.alive = false;
           break;
         }
@@ -712,6 +728,54 @@ export class GameEngine {
         ctx.strokeStyle = 'rgba(255,215,0,0.4)';
         ctx.lineWidth = 2;
         ctx.stroke();
+      }
+
+      // ── Planet shield force field ──────────────────────────────────────────────
+      if (m.moonShield) {
+        const pulse  = 0.55 + 0.45 * Math.sin(s.tick * 0.18);
+        const pulse2 = 0.55 + 0.45 * Math.sin(s.tick * 0.18 + Math.PI);
+
+        ctx.save();
+
+        // Outer thick glow ring
+        ctx.shadowColor = '#00d4ff';
+        ctx.shadowBlur  = 22;
+        ctx.strokeStyle = `rgba(0, 212, 255, ${pulse})`;
+        ctx.lineWidth   = 5;
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, MOON_RADIUS + 14, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner secondary ring (offset pulse)
+        ctx.shadowBlur  = 10;
+        ctx.strokeStyle = `rgba(120, 240, 255, ${pulse2 * 0.7})`;
+        ctx.lineWidth   = 2.5;
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, MOON_RADIUS + 8, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Rotating 6-segment arc (force-field panels)
+        ctx.save();
+        ctx.translate(m.x, m.y);
+        ctx.rotate(s.tick * 0.022);
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur  = 12;
+        ctx.strokeStyle = `rgba(0, 255, 255, ${0.35 + 0.3 * Math.sin(s.tick * 0.12)})`;
+        ctx.lineWidth   = 3.5;
+        ctx.lineCap     = 'round';
+        const segR  = MOON_RADIUS + 20;
+        const nSegs = 6;
+        const gap   = 0.32;
+        for (let i = 0; i < nSegs; i++) {
+          const start = (i / nSegs) * Math.PI * 2 + gap / 2;
+          const end   = ((i + 1) / nSegs) * Math.PI * 2 - gap / 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, segR, start, end);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        ctx.restore();
       }
     }
 
