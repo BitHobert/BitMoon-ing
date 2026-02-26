@@ -5,7 +5,7 @@ import {
   MOON_SPEED, MOON_Y_LANE, MOON_RADIUS,
   TIER_CONFIGS, BASE_ENEMY_SPEED,
   buildWave, isBossWave, getBossConfig, getBossIndex, randomPlanet,
-  POWERUP_CONFIGS,
+  POWERUP_CONFIGS, BOSS_POOL, PLANET_POOL,
 } from './constants';
 import type { PlanetConfig } from './constants';
 import type { GameState, GameCallbacks, EnemyEntity, ParticleEntity, PowerupEntity } from './types';
@@ -30,6 +30,8 @@ export class GameEngine {
   private readonly bossHpPool = new Map<number, number>();
   private readonly boundKeyDown: (e: KeyboardEvent) => void;
   private readonly boundKeyUp:   (e: KeyboardEvent) => void;
+  // PNG sprite cache — keyed by path under /public (e.g. 'sprites/enemy3.png')
+  private readonly sprites = new Map<string, HTMLImageElement>();
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -43,6 +45,7 @@ export class GameEngine {
     this.ctx = ctx;
 
     this.state = this.buildInitialState();
+    this.preloadSprites();
 
     this.boundKeyDown = (e: KeyboardEvent) => {
       if (e.key in KEYS) { (KEYS as Record<string, boolean>)[e.key] = true; e.preventDefault(); }
@@ -50,6 +53,20 @@ export class GameEngine {
     this.boundKeyUp = (e: KeyboardEvent) => {
       if (e.key in KEYS) { (KEYS as Record<string, boolean>)[e.key] = false; }
     };
+  }
+
+  // ── Sprite preloader ─────────────────────────────────────────────────────────
+
+  private preloadSprites(): void {
+    const paths = new Set<string>();
+    for (const cfg of Object.values(TIER_CONFIGS)) if (cfg.sprite)   paths.add(cfg.sprite);
+    for (const cfg of BOSS_POOL)                   if (cfg.sprite)   paths.add(cfg.sprite);
+    for (const cfg of PLANET_POOL)                 if (cfg.spriteId) paths.add(cfg.spriteId);
+    for (const p of paths) {
+      const img = new Image();
+      img.src = '/' + p;
+      this.sprites.set(p, img);
+    }
   }
 
   // ── Public API ───────────────────────────────────────────────────────────────
@@ -210,7 +227,7 @@ export class GameEngine {
     if (!s.moonSpawned && s.nextSpawns.length > 0 && elapsedTicks >= s.nextSpawns[0].delayFrames + 30) {
       const planet = s.currentPlanet;
       s.moon = {
-        x:           CANVAS_W + MOON_RADIUS * 2,
+        x:           -MOON_RADIUS * 2,
         y:           CANVAS_H * MOON_Y_LANE,
         alive:       true,
         flashFrames: 0,
@@ -350,9 +367,9 @@ export class GameEngine {
   private moveMoon(): void {
     const s = this.state;
     if (!s.moon || !s.moon.alive) return;
-    s.moon.x -= MOON_SPEED;
+    s.moon.x += MOON_SPEED;
     if (s.moon.flashFrames > 0) s.moon.flashFrames--;
-    if (s.moon.x < -MOON_RADIUS * 2) s.moon = null;
+    if (s.moon.x > CANVAS_W + MOON_RADIUS * 2) s.moon = null;
   }
 
   // ── Boss movement (patrol + sine Y) ──────────────────────────────────────────
@@ -709,14 +726,18 @@ export class GameEngine {
       const m = s.moon;
       const alpha = m.flashFrames > 0 ? 0.5 + 0.5 * Math.sin(m.flashFrames * 1.2) : 1;
       ctx.globalAlpha = alpha;
-      if (m.spriteId === 'purple') {
+      const pImg = m.spriteId ? this.sprites.get(m.spriteId) : null;
+      if (pImg?.complete && pImg.naturalWidth > 0) {
+        const pw = m.spriteId === 'sprites/planet-saturn.png' ? 160 : 128;
+        ctx.drawImage(pImg, m.x - pw / 2, m.y - pw / 2, pw, pw);
+      } else if (m.spriteId === 'sprites/planet-nebula.png') {
         this.drawPurplePlanet(ctx, m.x, m.y);
-      } else if (m.spriteId === 'inferno') {
+      } else if (m.spriteId === 'sprites/planet-inferno.png') {
         this.drawInfernoPlanet(ctx, m.x, m.y);
-      } else if (m.spriteId === 'saturn') {
+      } else if (m.spriteId === 'sprites/planet-saturn.png') {
         this.drawSaturnPlanet(ctx, m.x, m.y);
       } else {
-        ctx.font = '38px serif';
+        ctx.font = '76px serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(m.glyph, m.x, m.y);
@@ -787,12 +808,9 @@ export class GameEngine {
       if (!e.alive) continue;
       const alpha = e.flashFrames > 0 ? 0.4 + 0.6 * Math.sin(e.flashFrames * 1.5) : 1;
       ctx.globalAlpha = alpha;
-      if (e.cfg.tier === 3) {
-        this.drawAlienSprite(ctx, e.x, e.y, 28);
-      } else if (e.cfg.tier === 4) {
-        this.drawBugSprite(ctx, e.x, e.y, 28);
-      } else if (e.cfg.tier === 5) {
-        this.drawJellyfishSprite(ctx, e.x, e.y, 30);
+      const eImg = e.cfg.sprite ? this.sprites.get(e.cfg.sprite) : null;
+      if (eImg?.complete && eImg.naturalWidth > 0) {
+        ctx.drawImage(eImg, e.x - 16, e.y - 16, 32, 32);
       } else {
         ctx.fillText(e.cfg.glyph, e.x, e.y);
       }
@@ -822,12 +840,9 @@ export class GameEngine {
       const boss = s.boss;
       const alpha = boss.flashFrames > 0 ? 0.3 + 0.7 * Math.sin(boss.flashFrames * 1.5) : 1;
       ctx.globalAlpha = alpha;
-      if (boss.poolIndex === 1) {
-        this.drawUFOBoss(ctx, boss.x, boss.y);
-      } else if (boss.poolIndex === 2) {
-        this.drawRobotSkullBoss(ctx, boss.x, boss.y);
-      } else if (boss.poolIndex === 3) {
-        this.drawWatcherBoss(ctx, boss.x, boss.y);
+      const bImg = boss.cfg.sprite ? this.sprites.get(boss.cfg.sprite) : null;
+      if (bImg?.complete && bImg.naturalWidth > 0) {
+        ctx.drawImage(bImg, boss.x - 32, boss.y - 32, 64, 64);
       } else {
         ctx.font = `${boss.cfg.fontSize}px serif`;
         ctx.textAlign = 'center';
@@ -987,710 +1002,6 @@ export class GameEngine {
       ctx.shadowBlur = 0;
       ctx.fillText('SCORE: ' + s.score.toLocaleString(), W / 2, H / 2 + 20);
     }
-  }
-
-  // ── Tier 3 alien sprite (drawn procedurally — no image file needed) ──────────
-  private drawAlienSprite(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
-    const s = size / 32;
-    ctx.save();
-    ctx.translate(cx, cy);
-
-    // Horns (drawn first, behind body)
-    ctx.fillStyle = '#8c1bac';
-    ctx.beginPath();
-    ctx.moveTo(-6 * s, -10 * s);
-    ctx.lineTo(-11 * s, -22 * s);
-    ctx.lineTo(-2 * s, -13 * s);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(6 * s, -10 * s);
-    ctx.lineTo(11 * s, -22 * s);
-    ctx.lineTo(2 * s, -13 * s);
-    ctx.closePath();
-    ctx.fill();
-
-    // Body (radial gradient, pink-purple)
-    const bodyGrad = ctx.createRadialGradient(-2 * s, -4 * s, 1, 0, 1 * s, 12 * s);
-    bodyGrad.addColorStop(0, '#ee66ff');
-    bodyGrad.addColorStop(1, '#881db0');
-    ctx.fillStyle = bodyGrad;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 11 * s, 13 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Eyes — green with glow
-    ctx.save();
-    ctx.shadowColor = '#00ff55';
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = '#22ff66';
-    ctx.beginPath();
-    ctx.ellipse(-4 * s, -3 * s, 3.5 * s, 3.5 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(4 * s, -3 * s, 3.5 * s, 3.5 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Pupils
-    ctx.fillStyle = '#003311';
-    ctx.beginPath();
-    ctx.ellipse(-4 * s, -3 * s, 1.8 * s, 1.8 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(4 * s, -3 * s, 1.8 * s, 1.8 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Open mouth
-    ctx.fillStyle = '#220033';
-    ctx.beginPath();
-    ctx.arc(0, 6 * s, 5 * s, 0, Math.PI);
-    ctx.fill();
-
-    // Fangs
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.moveTo(-3.5 * s, 6 * s);
-    ctx.lineTo(-2.5 * s, 11 * s);
-    ctx.lineTo(-1 * s, 6 * s);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(1 * s, 6 * s);
-    ctx.lineTo(2.5 * s, 11 * s);
-    ctx.lineTo(3.5 * s, 6 * s);
-    ctx.closePath();
-    ctx.fill();
-
-    // Legs / claws
-    ctx.fillStyle = '#7a1a9e';
-    ctx.beginPath();
-    ctx.moveTo(-5 * s, 12 * s);
-    ctx.lineTo(-9 * s, 18 * s);
-    ctx.lineTo(-6.5 * s, 17 * s);
-    ctx.lineTo(-8 * s, 22 * s);
-    ctx.lineTo(-3 * s, 14 * s);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(5 * s, 12 * s);
-    ctx.lineTo(9 * s, 18 * s);
-    ctx.lineTo(6.5 * s, 17 * s);
-    ctx.lineTo(8 * s, 22 * s);
-    ctx.lineTo(3 * s, 14 * s);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.restore();
-  }
-
-  // ── Tier 4 bug sprite — green glowing body, blue eyes, orange spikes & legs ──
-  private drawBugSprite(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
-    const s = size / 32;
-    ctx.save();
-    ctx.translate(cx, cy);
-
-    // Orange spiky antennae radiating outward (drawn behind body)
-    const spikeAngles = [-80, -55, -30, 30, 55, 80, -110, 110];
-    for (const deg of spikeAngles) {
-      const rad = (deg * Math.PI) / 180;
-      const x1 = Math.cos(rad) * 9 * s,  y1 = Math.sin(rad) * 9 * s;
-      const x2 = Math.cos(rad) * 19 * s, y2 = Math.sin(rad) * 19 * s;
-      ctx.strokeStyle = '#ff8c00';
-      ctx.lineWidth = 2 * s;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
-      // Tip dot
-      ctx.fillStyle = '#ffcc00';
-      ctx.beginPath();
-      ctx.arc(x2, y2, 2.5 * s, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Body — glowing green circle
-    ctx.save();
-    ctx.shadowColor = '#00ff88';
-    ctx.shadowBlur = 14;
-    const bodyGrad = ctx.createRadialGradient(-2 * s, -2 * s, 1, 0, 0, 11 * s);
-    bodyGrad.addColorStop(0, '#ccffdd');
-    bodyGrad.addColorStop(0.45, '#22dd66');
-    bodyGrad.addColorStop(1, '#0a4422');
-    ctx.fillStyle = bodyGrad;
-    ctx.beginPath();
-    ctx.arc(0, 0, 11 * s, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Eyes — blue squares
-    ctx.fillStyle = '#3399ff';
-    ctx.fillRect(-7 * s, -5 * s, 5 * s, 5 * s);
-    ctx.fillRect(2 * s,  -5 * s, 5 * s, 5 * s);
-    // Pupils
-    ctx.fillStyle = '#001166';
-    ctx.fillRect(-6 * s, -4 * s, 3 * s, 3 * s);
-    ctx.fillRect(3 * s,  -4 * s, 3 * s, 3 * s);
-
-    // Mouth — orange arc smile
-    ctx.strokeStyle = '#ff8c00';
-    ctx.lineWidth = 1.8 * s;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.arc(0, 4 * s, 4 * s, 0.25, Math.PI - 0.25);
-    ctx.stroke();
-
-    // Spider legs (4 jointed legs at bottom)
-    ctx.strokeStyle = '#ff8c00';
-    ctx.lineWidth = 1.8 * s;
-    ctx.lineCap = 'round';
-    // Front-left
-    ctx.beginPath(); ctx.moveTo(-5 * s, 8 * s); ctx.lineTo(-11 * s, 15 * s); ctx.lineTo(-9 * s, 22 * s); ctx.stroke();
-    // Front-right
-    ctx.beginPath(); ctx.moveTo(5 * s,  8 * s); ctx.lineTo(11 * s,  15 * s); ctx.lineTo(9 * s,  22 * s); ctx.stroke();
-    // Back-left
-    ctx.beginPath(); ctx.moveTo(-8 * s, 5 * s); ctx.lineTo(-16 * s, 10 * s); ctx.lineTo(-14 * s, 17 * s); ctx.stroke();
-    // Back-right
-    ctx.beginPath(); ctx.moveTo(8 * s,  5 * s); ctx.lineTo(16 * s,  10 * s); ctx.lineTo(14 * s,  17 * s); ctx.stroke();
-
-    ctx.restore();
-  }
-
-  // ── Tier 5 jellyfish sprite — cyan glow, angry red eyes, toothed grin, tentacles ─
-  private drawJellyfishSprite(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
-    const s = size / 32;
-    ctx.save();
-    ctx.translate(cx, cy);
-
-    // Outer drooping side appendages (behind body)
-    ctx.save();
-    ctx.shadowColor = '#44eeff';
-    ctx.shadowBlur = 8;
-    ctx.strokeStyle = '#66ddee';
-    ctx.lineWidth = 3.5 * s;
-    ctx.lineCap = 'round';
-    // Left droop
-    ctx.beginPath();
-    ctx.moveTo(-9 * s, 6 * s);
-    ctx.bezierCurveTo(-14 * s, 12 * s, -16 * s, 18 * s, -12 * s, 26 * s);
-    ctx.stroke();
-    // Right droop
-    ctx.beginPath();
-    ctx.moveTo(9 * s, 6 * s);
-    ctx.bezierCurveTo(14 * s, 12 * s, 16 * s, 18 * s, 12 * s, 26 * s);
-    ctx.stroke();
-    ctx.restore();
-
-    // Inner tentacles (3 thin curling ones)
-    ctx.save();
-    ctx.shadowColor = '#88ffff';
-    ctx.shadowBlur = 5;
-    ctx.strokeStyle = '#aaeeff';
-    ctx.lineWidth = 1.5 * s;
-    ctx.lineCap = 'round';
-    const tentacleDefs = [
-      { x: -4 * s, curl:  3 * s },
-      { x:  0,     curl: -3 * s },
-      { x:  4 * s, curl:  3 * s },
-    ];
-    for (const t of tentacleDefs) {
-      ctx.beginPath();
-      ctx.moveTo(t.x, 9 * s);
-      ctx.bezierCurveTo(t.x + t.curl, 15 * s, t.x - t.curl, 20 * s, t.x + t.curl * 0.5, 28 * s);
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    // Body dome — cyan glow
-    ctx.save();
-    ctx.shadowColor = '#44ddff';
-    ctx.shadowBlur = 18;
-    const bodyGrad = ctx.createRadialGradient(-2 * s, -5 * s, 1, 0, -3 * s, 14 * s);
-    bodyGrad.addColorStop(0, '#eefffe');
-    bodyGrad.addColorStop(0.4, '#77ddee');
-    bodyGrad.addColorStop(1, '#1a6677');
-    ctx.fillStyle = bodyGrad;
-    ctx.beginPath();
-    ctx.arc(0, -2 * s, 13 * s, Math.PI, 0);        // top dome arc
-    ctx.lineTo(13 * s, 7 * s);
-    ctx.quadraticCurveTo(0, 12 * s, -13 * s, 7 * s); // flat-ish bell bottom
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-
-    // Eyes — dark angular slanted shape with red glow
-    ctx.fillStyle = '#0d1a22';
-    // Left eye triangle (slants inward ↘)
-    ctx.beginPath();
-    ctx.moveTo(-11 * s, -5 * s);
-    ctx.lineTo(-4 * s,  -2 * s);
-    ctx.lineTo(-4 * s,  -7 * s);
-    ctx.closePath();
-    ctx.fill();
-    // Right eye triangle (slants inward ↙)
-    ctx.beginPath();
-    ctx.moveTo(11 * s, -5 * s);
-    ctx.lineTo(4 * s,  -2 * s);
-    ctx.lineTo(4 * s,  -7 * s);
-    ctx.closePath();
-    ctx.fill();
-    // Red glow pupils
-    ctx.save();
-    ctx.shadowColor = '#ff3333';
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = '#ff5566';
-    ctx.beginPath();
-    ctx.ellipse(-7 * s, -5 * s, 2.2 * s, 2.2 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(7 * s, -5 * s, 2.2 * s, 2.2 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Mouth — wide grin (dark interior)
-    ctx.fillStyle = '#881133';
-    ctx.beginPath();
-    ctx.arc(0, 4 * s, 6 * s, 0.15, Math.PI - 0.15);
-    ctx.fill();
-    // Teeth (5 white rectangles)
-    ctx.fillStyle = '#ffffff';
-    for (let i = -2; i <= 2; i++) {
-      ctx.fillRect(i * 2.4 * s - 1.0 * s, 4 * s, 2.0 * s, 2.8 * s);
-    }
-
-    ctx.restore();
-  }
-
-  // ── Boss #2 — ABDUCTOR (UFO) ─────────────────────────────────────────────────
-  // Dark dome, red glowing eyes, cyan saucer disc, yellow port lights, red tentacles
-  private drawUFOBoss(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
-    const s = 2.2; // boss-scale multiplier
-    ctx.save();
-    ctx.translate(cx, cy);
-
-    // Red tentacles — 4 jointed legs below saucer (drawn first, behind body)
-    ctx.strokeStyle = '#dd3311';
-    ctx.lineWidth = 5;
-    ctx.lineCap = 'square';
-    // Outer-left
-    ctx.beginPath(); ctx.moveTo(-18 * s, 10 * s); ctx.lineTo(-18 * s, 19 * s); ctx.lineTo(-12 * s, 24 * s); ctx.stroke();
-    // Inner-left
-    ctx.beginPath(); ctx.moveTo(-7 * s,  10 * s); ctx.lineTo(-7 * s,  21 * s); ctx.lineTo(-11 * s, 26 * s); ctx.stroke();
-    // Inner-right
-    ctx.beginPath(); ctx.moveTo(7 * s,   10 * s); ctx.lineTo(7 * s,   21 * s); ctx.lineTo(11 * s,  26 * s); ctx.stroke();
-    // Outer-right
-    ctx.beginPath(); ctx.moveTo(18 * s,  10 * s); ctx.lineTo(18 * s,  19 * s); ctx.lineTo(12 * s,  24 * s); ctx.stroke();
-
-    // Saucer disc — cyan-to-purple gradient, wide ellipse
-    ctx.save();
-    ctx.shadowColor = '#00ccff';
-    ctx.shadowBlur = 22;
-    const discGrad = ctx.createLinearGradient(0, -3 * s, 0, 13 * s);
-    discGrad.addColorStop(0,    '#22eeff');
-    discGrad.addColorStop(0.35, '#1155aa');
-    discGrad.addColorStop(0.70, '#550088');
-    discGrad.addColorStop(1,    '#cc2200');
-    ctx.fillStyle = discGrad;
-    ctx.beginPath();
-    ctx.ellipse(0, 5 * s, 27 * s, 8.5 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Yellow port lights along saucer mid-band
-    ctx.fillStyle = '#ffcc00';
-    for (const px of [-17, -9, 0, 9, 17]) {
-      ctx.fillRect(px * s - 2.5, 4 * s, 5, 5);
-    }
-
-    // Dome — dark interior, cyan outline
-    ctx.save();
-    ctx.shadowColor = '#00ddff';
-    ctx.shadowBlur = 12;
-    const domeGrad = ctx.createRadialGradient(-3 * s, -8 * s, 1, 0, -5 * s, 12 * s);
-    domeGrad.addColorStop(0, '#1e2f55');
-    domeGrad.addColorStop(1, '#040912');
-    ctx.fillStyle = domeGrad;
-    ctx.beginPath();
-    ctx.ellipse(0, -3 * s, 13 * s, 10 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#00eeff';
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-    ctx.restore();
-
-    // Red glowing eyes inside dome
-    ctx.save();
-    ctx.shadowColor = '#ff0000';
-    ctx.shadowBlur = 20;
-    ctx.fillStyle = '#ff1111';
-    ctx.beginPath();
-    ctx.ellipse(-6 * s, -4 * s, 4.5 * s, 3 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(6 * s, -4 * s, 4.5 * s, 3 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // Bright pupils
-    ctx.fillStyle = '#ff8888';
-    ctx.beginPath();
-    ctx.ellipse(-6 * s, -4 * s, 2 * s, 1.5 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(6 * s, -4 * s, 2 * s, 1.5 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    ctx.restore();
-  }
-
-  // ── Boss #3 — OVERLORD (Robot Skull King) ────────────────────────────────────
-  // Metallic skull, gold crown w/ red gem, glowing red eyes, ear speakers,
-  // left antenna w/ red ball, teeth+jaw, red chin plate, rocket nozzle + flame
-  private drawRobotSkullBoss(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
-    const s = 2.0; // scale multiplier
-    ctx.save();
-    ctx.translate(cx, cy);
-
-    // ── Rocket flame (drawn first — behind skull) ─────────────────────────────
-    // Outer yellow flame
-    ctx.save();
-    ctx.shadowColor = '#ffaa00';
-    ctx.shadowBlur  = 20;
-    ctx.fillStyle   = '#ffcc00';
-    ctx.beginPath();
-    ctx.moveTo(-6 * s,  18 * s);
-    ctx.lineTo( 6 * s,  18 * s);
-    ctx.lineTo( 5 * s,  30 * s);
-    ctx.lineTo( 0,      35 * s);
-    ctx.lineTo(-5 * s,  30 * s);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-    // Inner orange core
-    ctx.save();
-    ctx.fillStyle = '#ff5500';
-    ctx.beginPath();
-    ctx.moveTo(-3 * s,  18 * s);
-    ctx.lineTo( 3 * s,  18 * s);
-    ctx.lineTo( 1.5 * s, 27 * s);
-    ctx.lineTo( 0,       30 * s);
-    ctx.lineTo(-1.5 * s, 27 * s);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-
-    // ── Rocket nozzle ─────────────────────────────────────────────────────────
-    ctx.fillStyle   = '#445566';
-    ctx.strokeStyle = '#778899';
-    ctx.lineWidth   = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(-7 * s,  13 * s);
-    ctx.lineTo( 7 * s,  13 * s);
-    ctx.lineTo( 5.5 * s, 19 * s);
-    ctx.lineTo(-5.5 * s, 19 * s);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    // Nozzle band detail
-    ctx.strokeStyle = '#aabbcc';
-    ctx.lineWidth   = 1;
-    ctx.beginPath();
-    ctx.moveTo(-6.5 * s, 15.5 * s);
-    ctx.lineTo( 6.5 * s, 15.5 * s);
-    ctx.stroke();
-
-    // ── Main skull head ────────────────────────────────────────────────────────
-    const skullGrad = ctx.createLinearGradient(-12 * s, -14 * s, 8 * s, 14 * s);
-    skullGrad.addColorStop(0,   '#d0d0e8');
-    skullGrad.addColorStop(0.4, '#8888aa');
-    skullGrad.addColorStop(1,   '#3a4a5a');
-    ctx.save();
-    ctx.shadowColor = '#8888bb';
-    ctx.shadowBlur  = 14;
-    ctx.fillStyle   = skullGrad;
-    ctx.beginPath();
-    ctx.moveTo(-12 * s, -14 * s);  // top-left
-    ctx.lineTo( 12 * s, -14 * s);  // top-right
-    ctx.lineTo( 14 * s,  -2 * s);  // right bulge
-    ctx.lineTo( 12 * s,  13 * s);  // jaw-right
-    ctx.lineTo(-12 * s,  13 * s);  // jaw-left
-    ctx.lineTo(-14 * s,  -2 * s);  // left bulge
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-    // Skull outline
-    ctx.strokeStyle = '#223344';
-    ctx.lineWidth   = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(-12 * s, -14 * s);
-    ctx.lineTo( 12 * s, -14 * s);
-    ctx.lineTo( 14 * s,  -2 * s);
-    ctx.lineTo( 12 * s,  13 * s);
-    ctx.lineTo(-12 * s,  13 * s);
-    ctx.lineTo(-14 * s,  -2 * s);
-    ctx.closePath();
-    ctx.stroke();
-
-    // ── Crown base band ────────────────────────────────────────────────────────
-    ctx.save();
-    ctx.shadowColor = '#ffcc00';
-    ctx.shadowBlur  = 10;
-    ctx.fillStyle   = '#ffd700';
-    ctx.fillRect(-12 * s, -20 * s, 24 * s, 7 * s);
-    ctx.restore();
-    // Crown band outline
-    ctx.strokeStyle = '#aa8800';
-    ctx.lineWidth   = 1;
-    ctx.strokeRect(-12 * s, -20 * s, 24 * s, 7 * s);
-
-    // ── 5 crown spikes ─────────────────────────────────────────────────────────
-    const spikesX = [-10, -5, 0, 5, 10];
-    const spikesH = [  8,  6, 11, 6,  8];
-    ctx.save();
-    ctx.shadowColor = '#ffdd00';
-    ctx.shadowBlur  = 8;
-    ctx.fillStyle   = '#ffd700';
-    for (let i = 0; i < 5; i++) {
-      const px = spikesX[i] * s;
-      ctx.beginPath();
-      ctx.moveTo(px - 3 * s, -20 * s);
-      ctx.lineTo(px,          (-20 - spikesH[i]) * s);
-      ctx.lineTo(px + 3 * s, -20 * s);
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.restore();
-    // Spike outlines
-    ctx.strokeStyle = '#aa8800';
-    ctx.lineWidth   = 1;
-    for (let i = 0; i < 5; i++) {
-      const px = spikesX[i] * s;
-      ctx.beginPath();
-      ctx.moveTo(px - 3 * s, -20 * s);
-      ctx.lineTo(px,          (-20 - spikesH[i]) * s);
-      ctx.lineTo(px + 3 * s, -20 * s);
-      ctx.stroke();
-    }
-
-    // ── Crown gem (red, on tallest center spike) ───────────────────────────────
-    ctx.save();
-    ctx.shadowColor = '#ff0000';
-    ctx.shadowBlur  = 18;
-    ctx.fillStyle   = '#dd0000';
-    ctx.beginPath();
-    ctx.arc(0, (-20 - 11) * s, 3.5 * s, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-    // Gem highlight
-    ctx.fillStyle = '#ff9999';
-    ctx.beginPath();
-    ctx.arc(-1 * s, (-20 - 12.5) * s, 1.2 * s, 0, Math.PI * 2);
-    ctx.fill();
-
-    // ── Eye sockets (dark recesses) ────────────────────────────────────────────
-    ctx.fillStyle = '#0d0d22';
-    ctx.beginPath();
-    ctx.ellipse(-6 * s, -5 * s, 5.5 * s, 5 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse( 6 * s, -5 * s, 5.5 * s, 5 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // ── Glowing red eyes ───────────────────────────────────────────────────────
-    ctx.save();
-    ctx.shadowColor = '#ff0000';
-    ctx.shadowBlur  = 24;
-    ctx.fillStyle   = '#ff1a00';
-    ctx.beginPath();
-    ctx.ellipse(-6 * s, -5 * s, 3.8 * s, 3.2 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse( 6 * s, -5 * s, 3.8 * s, 3.2 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-    // Eye highlights
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(-8 * s, -7 * s, 1.2 * s, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc( 4 * s, -7 * s, 1.2 * s, 0, Math.PI * 2);
-    ctx.fill();
-
-    // ── Ear speakers (left + right) ────────────────────────────────────────────
-    for (const side of [-1, 1]) {
-      const ex = side * 18 * s;
-      const ey = -3 * s;
-      const er = 5.5 * s;
-      // Speaker body
-      ctx.save();
-      ctx.shadowColor = '#cc0000';
-      ctx.shadowBlur  = 10;
-      ctx.fillStyle   = '#aa0000';
-      ctx.beginPath();
-      ctx.arc(ex, ey, er, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-      // Grille lines (horizontal, clipped to circle)
-      ctx.strokeStyle = '#440000';
-      ctx.lineWidth   = 1;
-      for (let gy = -3; gy <= 3; gy += 2) {
-        const hw = Math.sqrt(Math.max(0, er * er - (gy * s) * (gy * s)));
-        ctx.beginPath();
-        ctx.moveTo(ex - hw, ey + gy * s);
-        ctx.lineTo(ex + hw, ey + gy * s);
-        ctx.stroke();
-      }
-      // Speaker rim
-      ctx.strokeStyle = '#ff4444';
-      ctx.lineWidth   = 1.5;
-      ctx.beginPath();
-      ctx.arc(ex, ey, er, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-    // ── Antenna (top-left) ─────────────────────────────────────────────────────
-    ctx.strokeStyle = '#aabbcc';
-    ctx.lineWidth   = 2.5;
-    ctx.lineCap     = 'round';
-    ctx.beginPath();
-    ctx.moveTo(-10 * s, -14 * s);
-    ctx.lineTo(-17 * s, -30 * s);
-    ctx.stroke();
-    // Antenna ball
-    ctx.save();
-    ctx.shadowColor = '#ff2200';
-    ctx.shadowBlur  = 16;
-    ctx.fillStyle   = '#ff3300';
-    ctx.beginPath();
-    ctx.arc(-17 * s, -30 * s, 3.5 * s, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // ── Jaw panel (darker metal) ───────────────────────────────────────────────
-    ctx.fillStyle = '#556677';
-    ctx.beginPath();
-    ctx.moveTo(-11 * s,  5 * s);
-    ctx.lineTo( 11 * s,  5 * s);
-    ctx.lineTo( 12 * s,  13 * s);
-    ctx.lineTo(-12 * s,  13 * s);
-    ctx.closePath();
-    ctx.fill();
-
-    // ── Teeth (6 white rectangles) ─────────────────────────────────────────────
-    ctx.fillStyle = '#dde0ee';
-    const tw = 3 * s;    // tooth width
-    const th = 4.5 * s;  // tooth height
-    const tx = -9 * s;   // leftmost tooth x
-    const tg = 0.6 * s;  // gap between teeth
-    for (let t = 0; t < 6; t++) {
-      ctx.fillRect(tx + t * (tw + tg), 5 * s, tw, th);
-    }
-
-    // ── Red chin plate ─────────────────────────────────────────────────────────
-    ctx.save();
-    ctx.shadowColor = '#cc0000';
-    ctx.shadowBlur  = 8;
-    ctx.fillStyle   = '#bb1111';
-    ctx.beginPath();
-    ctx.moveTo(-11.5 * s, 9.5 * s);
-    ctx.lineTo( 11.5 * s, 9.5 * s);
-    ctx.lineTo( 12 * s,   13 * s);
-    ctx.lineTo(-12 * s,   13 * s);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-
-    ctx.restore();
-  }
-
-  // ── Boss #4 — WATCHER (Pixel-art invader eye beast) ──────────────────────────
-  // Classic space-invader silhouette: cyan blocky body, top prongs, wing extensions,
-  // bottom legs, large salmon eye with cross pupil, side pink spots, red wing tips
-  private drawWatcherBoss(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
-    const s = 2.0; // scale multiplier
-    ctx.save();
-    ctx.translate(cx, cy);
-
-    // ── Cyan body — all blocks drawn with unified teal glow ───────────────────
-    ctx.save();
-    ctx.shadowColor = '#00ccee';
-    ctx.shadowBlur  = 24;
-    ctx.fillStyle   = '#33bbcc';
-
-    // Top prongs (two narrow rects with gap, tilted slightly outward via extra x offset)
-    ctx.fillRect(-5.5 * s, -21 * s, 3.5 * s, 9 * s);  // left prong
-    ctx.fillRect( 2.0 * s, -21 * s, 3.5 * s, 9 * s);  // right prong
-
-    // Upper shoulder connector
-    ctx.fillRect(-8 * s, -12 * s, 16 * s, 5 * s);
-
-    // Central body block
-    ctx.fillRect(-8 * s,  -7 * s, 16 * s, 14 * s);
-
-    // Wing extensions (horizontal arms)
-    ctx.fillRect(-18 * s, -4.5 * s, 10 * s, 9 * s);  // left wing
-    ctx.fillRect(  8 * s, -4.5 * s, 10 * s, 9 * s);  // right wing
-
-    // Lower connector
-    ctx.fillRect(-8 * s,   7 * s, 16 * s, 5 * s);
-
-    // Bottom legs (two, mirroring the top prongs)
-    ctx.fillRect(-6 * s,  12 * s, 4 * s, 9 * s);   // left leg
-    ctx.fillRect( 2 * s,  12 * s, 4 * s, 9 * s);   // right leg
-
-    ctx.restore();
-
-    // ── Wing tips (hot pink / red accent) ────────────────────────────────────
-    ctx.save();
-    ctx.shadowColor = '#ff4422';
-    ctx.shadowBlur  = 14;
-    ctx.fillStyle   = '#ff5533';
-    ctx.fillRect(-22.5 * s, -3.5 * s, 4.5 * s, 7 * s);  // left tip
-    ctx.fillRect( 18.0 * s, -3.5 * s, 4.5 * s, 7 * s);  // right tip
-    ctx.restore();
-
-    // ── Central eye — outer salmon ring ───────────────────────────────────────
-    ctx.save();
-    ctx.shadowColor = '#ff8866';
-    ctx.shadowBlur  = 20;
-    ctx.fillStyle   = '#ff9977';
-    ctx.beginPath();
-    ctx.arc(0, 0, 7.5 * s, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Eye inner dark sclera
-    ctx.fillStyle = '#0e0018';
-    ctx.beginPath();
-    ctx.arc(0, 0, 5.5 * s, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Cross / + pupil
-    ctx.fillStyle = '#1a0033';
-    ctx.fillRect(-5 * s, -1.5 * s, 10 * s, 3 * s);  // horizontal bar
-    ctx.fillRect(-1.5 * s, -5 * s,  3 * s, 10 * s); // vertical bar
-
-    // Tiny eye highlight (upper-left gleam)
-    ctx.fillStyle = 'rgba(255, 210, 190, 0.50)';
-    ctx.beginPath();
-    ctx.arc(-2.5 * s, -2.5 * s, 2 * s, 0, Math.PI * 2);
-    ctx.fill();
-
-    // ── Side spots (smaller salmon/pink dots) ─────────────────────────────────
-    ctx.save();
-    ctx.shadowColor = '#ff7755';
-    ctx.shadowBlur  = 10;
-    ctx.fillStyle   = '#ff9977';
-    ctx.beginPath();
-    ctx.arc(-11 * s, 0, 2.5 * s, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc( 11 * s, 0, 2.5 * s, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    ctx.restore();
   }
 
   // ── Planet sprite — NEBULA (purple planet with cyan continent patches) ────────

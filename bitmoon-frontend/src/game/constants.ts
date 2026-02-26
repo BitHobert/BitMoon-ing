@@ -21,15 +21,15 @@ export interface PlanetConfig {
   readonly glyph:    string;
   readonly penalty:  number;   // points lost if enemy destroys it
   readonly label:    string;   // shown in HUD hint
-  readonly spriteId?: string;  // if set, use custom canvas draw instead of emoji
+  readonly spriteId?: string;  // path under /public — if set, use PNG sprite
 }
 
 export const PLANET_POOL: PlanetConfig[] = [
   { glyph: '🌕', penalty:  7_000, label: 'MOON'      },
-  { glyph: '🌍', penalty: 10_000, label: 'NEBULA',    spriteId: 'purple' },
-  { glyph: '🌎', penalty: 15_000, label: 'INFERNO',   spriteId: 'inferno' },
+  { glyph: '🌍', penalty: 10_000, label: 'NEBULA',    spriteId: 'sprites/planet-nebula.png'  },
+  { glyph: '🌎', penalty: 15_000, label: 'INFERNO',   spriteId: 'sprites/planet-inferno.png' },
   { glyph: '🌏', penalty: 20_000, label: 'EARTH'     },
-  { glyph: '🪐', penalty: 25_000, label: 'SATURN',    spriteId: 'saturn' },
+  { glyph: '🪐', penalty: 25_000, label: 'SATURN',    spriteId: 'sprites/planet-saturn.png'  },
   { glyph: '🌑', penalty: 40_000, label: 'DARK MOON' },
 ];
 
@@ -41,21 +41,22 @@ export function randomPlanet(): PlanetConfig {
 
 export interface TierConfig {
   readonly tier: TierNumber;
-  readonly glyph:       string;    // emoji rendered on canvas
+  readonly glyph:       string;    // emoji fallback if sprite not loaded
   readonly hp:          number;
   readonly basePoints:  number;
   readonly burnUnits:   bigint;    // raw supply units consumed per kill
   readonly speedFactor: number;    // multiplier on base enemy speed
   readonly firesBack:   boolean;   // can shoot at player
   readonly ySine:       number;    // y-oscillation amplitude (0 = straight line)
+  readonly sprite?:     string;    // path under /public — if set, use PNG sprite
 }
 
 export const TIER_CONFIGS: Record<TierNumber, TierConfig> = {
-  1: { tier: 1, glyph: '👾', hp: 1, basePoints: 100,  burnUnits: 100_000_000n,   speedFactor: 1.0, firesBack: false, ySine: 0   },
-  2: { tier: 2, glyph: '🛸', hp: 2, basePoints: 300,  burnUnits: 500_000_000n,   speedFactor: 1.2, firesBack: false, ySine: 30  },
-  3: { tier: 3, glyph: '🤖', hp: 3, basePoints: 750,  burnUnits: 1_000_000_000n, speedFactor: 1.4, firesBack: true,  ySine: 50  },
-  4: { tier: 4, glyph: '👻', hp: 5, basePoints: 1500, burnUnits: 5_000_000_000n, speedFactor: 1.6, firesBack: true,  ySine: 20  },
-  5: { tier: 5, glyph: '💀', hp: 8, basePoints: 3000, burnUnits: 10_000_000_000n,speedFactor: 2.0, firesBack: true,  ySine: 0   },
+  1: { tier: 1, glyph: '👾', hp: 1, basePoints: 100,  burnUnits: 100_000_000n,    speedFactor: 1.0, firesBack: false, ySine: 0  },
+  2: { tier: 2, glyph: '🛸', hp: 2, basePoints: 300,  burnUnits: 500_000_000n,    speedFactor: 1.2, firesBack: false, ySine: 30 },
+  3: { tier: 3, glyph: '🤖', hp: 3, basePoints: 750,  burnUnits: 1_000_000_000n,  speedFactor: 1.4, firesBack: true,  ySine: 50, sprite: 'sprites/enemy3.png' },
+  4: { tier: 4, glyph: '👻', hp: 5, basePoints: 1500, burnUnits: 5_000_000_000n,  speedFactor: 1.6, firesBack: true,  ySine: 20, sprite: 'sprites/enemy4.png' },
+  5: { tier: 5, glyph: '💀', hp: 8, basePoints: 3000, burnUnits: 10_000_000_000n, speedFactor: 2.0, firesBack: true,  ySine: 0,  sprite: 'sprites/enemy5.png' },
 };
 
 export const BASE_ENEMY_SPEED = 1.4; // px/frame at speedFactor 1.0
@@ -64,8 +65,8 @@ export const BASE_ENEMY_SPEED = 1.4; // px/frame at speedFactor 1.0
 
 export interface BossConfig {
   readonly name:         string;
-  readonly glyph:        string;
-  readonly fontSize:     number;   // px — larger than regular 22px enemies
+  readonly glyph:        string;   // emoji fallback if sprite not loaded
+  readonly fontSize:     number;   // px — used for emoji fallback size
   readonly hp:           number;   // full HP pool (shared across all encounters)
   readonly points:       number;   // points awarded on kill
   readonly burnUnits:    bigint;
@@ -73,6 +74,7 @@ export interface BossConfig {
   readonly fireRate:     number;   // frames between shots
   readonly bulletSpread: number;   // bullets per shot (spread fan)
   readonly duration:     number;   // frames before retreat if still alive
+  readonly sprite?:      string;   // path under /public — if set, use PNG sprite
 }
 
 export const BOSS_POOL: BossConfig[] = [
@@ -90,7 +92,7 @@ export const BOSS_POOL: BossConfig[] = [
   },
   {
     name:         'ABDUCTOR',
-    glyph:        '🛸',        // fallback only — custom sprite used in render
+    glyph:        '🛸',
     fontSize:     64,
     hp:           80,
     points:       40_000,
@@ -99,10 +101,11 @@ export const BOSS_POOL: BossConfig[] = [
     fireRate:     28,
     bulletSpread: 1,
     duration:     1200,
+    sprite:       'sprites/boss-abductor.png',
   },
   {
     name:         'OVERLORD',
-    glyph:        '💀',        // fallback only — custom sprite used in render
+    glyph:        '💀',
     fontSize:     64,
     hp:           100,
     points:       60_000,
@@ -111,10 +114,11 @@ export const BOSS_POOL: BossConfig[] = [
     fireRate:     22,
     bulletSpread: 1,
     duration:     1200,
+    sprite:       'sprites/boss-overlord.png',
   },
   {
     name:         'WATCHER',
-    glyph:        '👁',         // fallback only — custom sprite used in render
+    glyph:        '👁',
     fontSize:     64,
     hp:           120,
     points:       80_000,
@@ -123,6 +127,7 @@ export const BOSS_POOL: BossConfig[] = [
     fireRate:     18,
     bulletSpread: 2,
     duration:     1200,
+    sprite:       'sprites/boss-watcher.png',
   },
   // Add more bosses here — they cycle every 5 waves
 ];
