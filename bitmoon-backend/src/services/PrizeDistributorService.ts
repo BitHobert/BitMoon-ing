@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Collection, Db } from 'mongodb';
 import { Address, Wallet } from '@btc-vision/transaction';
-import { getContract, type TransactionParameters } from 'opnet';
+import { getContract, type OPNetEvent, type TransactionParameters } from 'opnet';
 import { networks } from '@btc-vision/bitcoin';
 import { Config } from '../config/Config.js';
 import { OPNetService } from './OPNetService.js';
@@ -10,6 +10,7 @@ import { LeaderboardService } from './LeaderboardService.js';
 import {
     PRIZE_DISTRIBUTOR_ABI,
     type IPrizeDistributorContract,
+    type SponsorBonusDepositedEventData,
 } from '../contracts/PrizeDistributorABI.js';
 import type { PrizeDistribution, SponsorBonus, TournamentType } from '../types/index.js';
 
@@ -169,13 +170,12 @@ export class PrizeDistributorService {
             txid,
         );
 
-        // Extract slotIndex from the emitted SponsorBonusDeposited event
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const events: any[] = (txResult as any).events ?? [];
-        const depositEvent = events.find((e: { eventName?: string }) => e.eventName === 'SponsorBonusDeposited');
-        const slotIndex: number = depositEvent != null
-            ? Number((depositEvent.data as { slotIndex?: unknown }).slotIndex ?? 0)
-            : 0;
+        // Extract slotIndex from the emitted SponsorBonusDeposited event.
+        // Simulation events are on call.events (CallResult<T,U>.events: U).
+        // OPNetEvent<T>.type is the event name; OPNetEvent<T>.properties is the decoded payload.
+        const events: OPNetEvent<SponsorBonusDepositedEventData>[] = call.events ?? [];
+        const depositEvent = events.find(e => e.type === 'SponsorBonusDeposited');
+        const slotIndex: number = depositEvent?.properties.slotIndex ?? 0;
 
         const doc: SponsorBonus = {
             _id:            randomUUID(),

@@ -111,6 +111,13 @@ function makeSponsorKey(tournamentType: u8, periodKey: u256, slot: u32): Uint8Ar
 const COUNT_SENTINEL: u32 = 0xFFFFFFFF;
 
 /**
+ * Maximum sponsor bonus slots per (tournamentType, periodKey).
+ * Caps the for-loop in _distributePrize to prevent Bitcoin witness-size overflow
+ * (~100 KB relay limit). 50 slots × ~32 bytes calldata per slot ≈ 1.6 KB — well safe.
+ */
+const MAX_SPONSOR_SLOTS: u32 = 50;
+
+/**
  * Encode a 20-byte Address into the low 20 bytes of a big-endian u256
  * (bytes 0-11 are zero, bytes 12-31 are the address).
  */
@@ -314,6 +321,11 @@ export class PrizeDistributor extends OP_NET {
         if (tournamentType > 2) throw new Revert('PrizeDistributor: invalid tournament type');
         if (u256.eq(amount, u256.Zero)) throw new Revert('PrizeDistributor: zero amount');
 
+        // periodKey must fit in u64 (block numbers do; sponsor key only encodes lo1)
+        if (periodKey.lo2 !== 0 || periodKey.hi1 !== 0 || periodKey.hi2 !== 0) {
+            throw new Revert('PrizeDistributor: periodKey exceeds u64');
+        }
+
         // Guard: period must not be already closed
         if (u256.eq(this.lastDistKey(tournamentType).value, periodKey)) {
             throw new Revert('PrizeDistributor: period already distributed');
@@ -388,10 +400,22 @@ export class PrizeDistributor extends OP_NET {
         const v3 = !isZeroAddress(w3);
         const validCount: u8 = (v1 ? 1 : 0) + (v2 ? 1 : 0) + (v3 ? 1 : 0);
 
+        // ── CEI: mark period as distributed FIRST before any external transfer ──
+        // This prevents reentrancy via onTokenReceived() callbacks on winner
+        // contracts from re-entering distributePrize() with the same periodKey.
+        this.lastDistKey(tournamentType).value = periodKey;
+
+        // Pool rotation: activeCarry = stagingCarry; clear main and staging
+        active.value  = staging.value;
+        main.value    = u256.Zero;
+        staging.value = u256.Zero;
+
         if (!u256.eq(prizeTotal, u256.Zero)) {
             if (validCount === 0) {
-                // Rollover — add entire prize to stagingCarry for next period
-                staging.value = SafeMath.add(staging.value, prizeTotal);
+                // Rollover — add entire prize to stagingCarry for next period.
+                // NOTE: staging was already cleared above; we add directly to active
+                // since staging is now 0. Re-read active which was just set.
+                active.value = SafeMath.add(active.value, prizeTotal);
             } else if (validCount === 1) {
                 // Single winner — gets 100 %
                 TransferHelper.transfer(token, w1, prizeTotal);
@@ -412,11 +436,6 @@ export class PrizeDistributor extends OP_NET {
             }
         }
 
-        // Pool rotation: activeCarry = stagingCarry; clear main and staging
-        active.value  = staging.value;
-        main.value    = u256.Zero;
-        staging.value = u256.Zero;
-
         // Dev cut: transfer entire accumulated devPool to devWallet
         const devAmount = this._devPool.value;
         if (!u256.eq(devAmount, u256.Zero)) {
@@ -427,11 +446,13 @@ export class PrizeDistributor extends OP_NET {
         // ── Sponsor bonus distribution ──────────────────────────────────────────
         // If w1 is a valid winner, transfer every deposited sponsor bonus to them.
         // If there is no winner, bonuses remain locked in the contract.
+        // Capped at MAX_SPONSOR_SLOTS to prevent witness-size overflow.
         {
             const countKey     = makeSponsorKey(tournamentType, periodKey, COUNT_SENTINEL);
             const sponsorCount = u32(new StoredU256(sponsorCountPointer, countKey).value.lo1);
-            if (v1 && sponsorCount > 0) {
-                for (let slot: u32 = 0; slot < sponsorCount; slot++) {
+            const slotsToProcess: u32 = sponsorCount < MAX_SPONSOR_SLOTS ? sponsorCount : MAX_SPONSOR_SLOTS;
+            if (v1 && slotsToProcess > 0) {
+                for (let slot: u32 = 0; slot < slotsToProcess; slot++) {
                     const slotKey    = makeSponsorKey(tournamentType, periodKey, slot);
                     const tokenAsU256 = new StoredU256(sponsorTokenPointer,  slotKey).value;
                     const bonusAmt    = new StoredU256(sponsorAmountPointer, slotKey).value;
@@ -445,9 +466,6 @@ export class PrizeDistributor extends OP_NET {
                 }
             }
         }
-
-        // Mark period as distributed
-        this.lastDistKey(tournamentType).value = periodKey;
 
         this.emitEvent(new PrizeDistributedEvent(tournamentType, periodKey, w1, w2, w3, prizeTotal));
 
@@ -510,6 +528,10 @@ export class PrizeDistributor extends OP_NET {
         if (isZeroAddress(tokenAddress)) {
             throw new Revert('PrizeDistributor: zero bonus token address');
         }
+        // periodKey must fit in u64 (block numbers do; sponsor key only encodes lo1)
+        if (periodKey.lo2 !== 0 || periodKey.hi1 !== 0 || periodKey.hi2 !== 0) {
+            throw new Revert('PrizeDistributor: periodKey exceeds u64');
+        }
 
         const tokenAsU256 = addressToU256(tokenAddress);
 
@@ -518,6 +540,11 @@ export class PrizeDistributor extends OP_NET {
         const countStore = new StoredU256(sponsorCountPointer, countKey);
         const currentCount: u256 = countStore.value;
         const slotIndex: u32     = u32(currentCount.lo1);
+
+        // Enforce slot cap to keep distribution witness size bounded
+        if (slotIndex >= MAX_SPONSOR_SLOTS) {
+            throw new Revert('PrizeDistributor: sponsor slot cap reached');
+        }
 
         // Write token address and amount at this slot
         const slotKey = makeSponsorKey(tournamentType, periodKey, slotIndex);
