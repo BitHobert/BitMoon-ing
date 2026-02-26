@@ -64,6 +64,25 @@ export class PaymentService {
         _playerAddress: string,
         tournamentType: TournamentType,
     ): Promise<PaymentVerificationResult> {
+        // ── DEV_MODE bypass ─────────────────────────────────────────────────
+        // Accept any txHash so tournament flow can be tested without a
+        // deployed contract or real OP-20 tokens on chain.
+        if (Config.DEV_MODE) {
+            const feeConfig  = await TournamentService.getInstance().getFeeConfig(tournamentType);
+            const fakeAmount = BigInt(feeConfig.entryFee);
+            const { devAmount, nextPoolAmount, prizeAmount } =
+                TournamentService.getInstance().computeSplit(fakeAmount);
+            console.warn(`[PaymentService] DEV_MODE — auto-approving payment ${txHash}`);
+            return {
+                valid:          true,
+                confirmations:  999,
+                amountPaid:     fakeAmount,
+                devAmount,
+                nextPoolAmount,
+                prizeAmount,
+            };
+        }
+
         if (!Config.ENTRY_TOKEN_ADDRESS || !Config.PRIZE_CONTRACT_ADDRESS) {
             return invalid('Server entry token or prize contract address is not configured');
         }

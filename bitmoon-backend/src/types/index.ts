@@ -57,6 +57,8 @@ export interface SessionStartRequest {
     readonly signature: string;
     /** The plaintext message that was signed */
     readonly message: string;
+    /** Hex-encoded compressed public key (33 bytes) from the wallet */
+    readonly publicKey?: string;
 }
 
 export interface SessionEndRequest {
@@ -247,6 +249,8 @@ export interface PrizeDistribution {
     readonly distributedAt: number;
     /** Block at which distribution was triggered */
     readonly blockNumber: string;
+    /** Native BTC transfer transaction IDs (one per winner, when BTC prizes enabled) */
+    readonly btcTxIds?: string[];
 }
 
 // ─── Sponsor Bonus ────────────────────────────────────────────────────────────

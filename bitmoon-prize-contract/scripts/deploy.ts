@@ -31,7 +31,7 @@ import { fileURLToPath } from 'node:url';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const NETWORK = networks.testnet;
+const NETWORK = networks.opnetTestnet;
 const RPC_URL = 'https://testnet.opnet.org';
 
 const phrase      = process.env['MNEMONIC']            ?? '';

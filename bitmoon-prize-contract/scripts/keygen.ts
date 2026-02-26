@@ -17,7 +17,7 @@ if (!phrase.trim()) {
     process.exit(1);
 }
 
-const mnemonic = new Mnemonic(phrase.trim(), '', networks.testnet, MLDSASecurityLevel.LEVEL2);
+const mnemonic = new Mnemonic(phrase.trim(), '', networks.opnetTestnet, MLDSASecurityLevel.LEVEL2);
 const wallet   = mnemonic.derive(0);
 
 console.log('\n=== BitMoon Operator Keys (TESTNET — keep secret!) ===\n');

@@ -15,6 +15,7 @@ export interface WalletActions {
   connect: (preferred?: WalletType) => Promise<void>;
   disconnect: () => void;
   signMessage: (message: string) => Promise<string>;
+  getPublicKey: () => Promise<string>;
   detectWallet: () => WalletType;
 }
 
@@ -97,5 +98,21 @@ export function useWallet(): WalletState & WalletActions {
     }
   }, [state.connected, state.type]);
 
-  return { ...state, connect, disconnect, signMessage, detectWallet };
+  const getPublicKey = useCallback(async (): Promise<string> => {
+    if (!state.connected || !state.type) throw new Error('Wallet not connected');
+
+    if (state.type === 'opnet') {
+      // OP_WALLET extends Unisat — both expose getPublicKey()
+      const opnet = (window as Window & { opnet?: { getPublicKey: () => Promise<string> } }).opnet;
+      if (!opnet) throw new Error('OP_WALLET not available');
+      return opnet.getPublicKey();
+    } else {
+      // Unisat
+      const unisat = (window as Window & { unisat?: { getPublicKey: () => Promise<string> } }).unisat;
+      if (!unisat) throw new Error('Unisat not available');
+      return unisat.getPublicKey();
+    }
+  }, [state.connected, state.type]);
+
+  return { ...state, connect, disconnect, signMessage, getPublicKey, detectWallet };
 }

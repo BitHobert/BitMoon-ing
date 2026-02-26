@@ -110,6 +110,7 @@ export interface SessionStartRequest {
   readonly playerAddress: string;
   readonly signature: string;
   readonly message: string;
+  readonly publicKey?: string;
   readonly tournamentType?: TournamentType;
 }
 

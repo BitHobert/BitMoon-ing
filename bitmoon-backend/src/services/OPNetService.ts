@@ -1,5 +1,4 @@
 import { JSONRpcProvider } from 'opnet';
-import { networks, type Network } from '@btc-vision/bitcoin';
 import { Config } from '../config/Config.js';
 
 /**
@@ -15,14 +14,9 @@ export class OPNetService {
     private readonly provider: JSONRpcProvider;
 
     private constructor() {
-        const network: Network =
-            Config.OPNET_NETWORK === 'mainnet'
-                ? networks.bitcoin
-                : networks.testnet;
-
         this.provider = new JSONRpcProvider({
             url: Config.OPNET_RPC_URL,
-            network,
+            network: Config.NETWORK,
         });
     }
 

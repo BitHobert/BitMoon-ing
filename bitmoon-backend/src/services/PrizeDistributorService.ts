@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { Collection, Db } from 'mongodb';
-import { Address, Wallet } from '@btc-vision/transaction';
+import { Address, OPNetLimitedProvider, TransactionFactory, Wallet } from '@btc-vision/transaction';
+import type { UTXO } from '@btc-vision/transaction';
 import { getContract, type OPNetEvent, type TransactionParameters } from 'opnet';
-import { networks } from '@btc-vision/bitcoin';
 import { Config } from '../config/Config.js';
 import { OPNetService } from './OPNetService.js';
 import { TournamentService } from './TournamentService.js';
@@ -58,10 +58,7 @@ export class PrizeDistributorService {
         );
 
         if (Config.OPERATOR_PRIVATE_KEY) {
-            const network = Config.OPNET_NETWORK === 'mainnet'
-                ? networks.bitcoin
-                : networks.testnet;
-            this.wallet = new Wallet(Config.OPERATOR_PRIVATE_KEY, Config.OPERATOR_MLDSA_KEY, network);
+            this.wallet = new Wallet(Config.OPERATOR_PRIVATE_KEY, Config.OPERATOR_MLDSA_KEY, Config.NETWORK);
             this.operatorAddress = Address.fromString(this.wallet.p2tr);
         }
 
@@ -70,9 +67,12 @@ export class PrizeDistributorService {
 
     /** Start the block-polling loop. Runs indefinitely until stopWatcher() is called. */
     public startWatcher(): void {
-        if (!Config.PRIZE_CONTRACT_ADDRESS || !Config.OPERATOR_PRIVATE_KEY) {
-            console.warn('[PrizeDistributorService] PRIZE_CONTRACT_ADDRESS or OPERATOR_PRIVATE_KEY not set — watcher disabled');
+        if (!Config.OPERATOR_PRIVATE_KEY) {
+            console.warn('[PrizeDistributorService] OPERATOR_PRIVATE_KEY not set — watcher disabled');
             return;
+        }
+        if (!Config.PRIZE_CONTRACT_ADDRESS) {
+            console.log('[PrizeDistributorService] No PRIZE_CONTRACT_ADDRESS — BTC-only prize mode');
         }
         console.log('[PrizeDistributorService] Prize watcher started');
         this.scheduleWatch();
@@ -303,15 +303,30 @@ export class PrizeDistributorService {
             winners.push({ place: 3, address: top3[2].playerAddress, amount: p3.toString() });
         }
 
+        // ── BTC Prize Distribution ────────────────────────────────────────────
+        // Send native BTC to each winner from the operator wallet.
+        // Prize amounts are configured in env (BTC_PRIZE_*_SATS) or default to 0.
+        const btcTxIds: string[] = [];
+        if (Config.BTC_PRIZE_ENABLED && winners.length > 0) {
+            try {
+                const txIds = await this.sendBTCPrizes(type, winners);
+                btcTxIds.push(...txIds);
+            } catch (err) {
+                console.error('[PrizeDistributorService] BTC prize distribution failed:', err);
+                // Don't block the rest — OP-20 distribution was already recorded
+            }
+        }
+
         const doc: PrizeDistribution = {
             _id:            randomUUID(),
             tournamentType: type,
             tournamentKey:  periodKey,
-            txHash:         txid,
+            txHash:         txid || btcTxIds[0] || '',
             winners,
             totalPrize:     totalPrize.toString(),
             distributedAt:  Date.now(),
             blockNumber:    prizeBlock.toString(),
+            btcTxIds,
         };
 
         try {
@@ -324,6 +339,81 @@ export class PrizeDistributorService {
         }
     }
 
+    // ── BTC Prize Distribution ────────────────────────────────────────────────
+
+    /**
+     * Send native BTC to each winner from the operator wallet.
+     * Uses TransactionFactory.createBTCTransfer() for each recipient.
+     * Returns an array of broadcast transaction IDs.
+     */
+    private async sendBTCPrizes(
+        type: TournamentType,
+        winners: Array<{ place: 1|2|3; address: string; amount: string }>,
+    ): Promise<string[]> {
+        const utxoProvider = new OPNetLimitedProvider(Config.OPNET_RPC_URL);
+        const factory      = new TransactionFactory();
+        const fromAddress  = Config.OPERATOR_P2TR_ADDRESS || this.wallet.p2tr;
+        const txIds: string[] = [];
+
+        // Determine BTC prize for each place (in satoshis)
+        const prizeMap: Record<number, bigint> = {
+            1: Config.BTC_PRIZE_1ST_SATS,
+            2: Config.BTC_PRIZE_2ND_SATS,
+            3: Config.BTC_PRIZE_3RD_SATS,
+        };
+
+        // Track remaining UTXOs across sequential transfers
+        let currentUtxos: UTXO[] | null = null;
+
+        for (const winner of winners) {
+            const prizeSats = prizeMap[winner.place] ?? 0n;
+            if (prizeSats <= 0n) continue;
+
+            try {
+                // Fetch UTXOs (use change from previous tx if available)
+                if (!currentUtxos) {
+                    const fetched = await utxoProvider.fetchUTXO({
+                        address:         fromAddress,
+                        minAmount:       10_000n,
+                        requestedAmount: prizeSats + 5_000n, // extra for fees
+                    });
+                    currentUtxos = fetched;
+                }
+
+                const result = await factory.createBTCTransfer({
+                    signer:      this.wallet.keypair,
+                    mldsaSigner: null,
+                    network:     Config.NETWORK,
+                    utxos:       currentUtxos,
+                    from:        fromAddress,
+                    to:          winner.address,
+                    amount:      prizeSats,
+                    feeRate:     10,
+                    priorityFee: 0n,
+                    gasSatFee:   0n,
+                });
+
+                const broadcast = await utxoProvider.broadcastTransaction(result.tx, false);
+                const broadcastTxId = broadcast?.result ?? '';
+                txIds.push(broadcastTxId);
+
+                console.log(
+                    `[PrizeDistributorService] BTC prize sent: ${type} #${winner.place} → ${winner.address} (${prizeSats} sats) tx: ${broadcastTxId}`,
+                );
+
+                // Use change UTXOs for the next transfer
+                currentUtxos = result.nextUTXOs;
+            } catch (err) {
+                console.error(
+                    `[PrizeDistributorService] BTC transfer failed for ${type} #${winner.place} → ${winner.address}:`,
+                    err,
+                );
+            }
+        }
+
+        return txIds;
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     private isContractReady(): boolean {
@@ -332,15 +422,11 @@ export class PrizeDistributorService {
 
     private getContract() {
         const provider = OPNetService.getInstance().getProvider();
-        const network  = Config.OPNET_NETWORK === 'mainnet'
-            ? networks.bitcoin
-            : networks.testnet;
-
         return getContract<IPrizeDistributorContract>(
             Config.PRIZE_CONTRACT_ADDRESS,
             PRIZE_DISTRIBUTOR_ABI,
             provider,
-            network,
+            Config.NETWORK,
             this.operatorAddress,
         );
     }
@@ -353,9 +439,7 @@ export class PrizeDistributorService {
             maximumAllowedSatToSpend: 10_000n,
             feeRate:                  10,
             priorityFee:              0n,
-            network:                  Config.OPNET_NETWORK === 'mainnet'
-                ? networks.bitcoin
-                : networks.testnet,
+            network:                  Config.NETWORK,
         };
     }
 

@@ -48,7 +48,7 @@ export class GiveawayService {
 
     public async connect(db: Db): Promise<void> {
         this.collection = db.collection<GiveawayDoc>('giveaway_snapshots');
-        await this.collection.createIndex({ _id: 1 }, { unique: true });
+        // _id is always unique by default — no need to create an explicit index for it
         await this.collection.createIndex({ takenAt: -1 });
         console.log('[GiveawayService] Connected');
     }

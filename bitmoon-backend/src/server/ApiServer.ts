@@ -218,17 +218,17 @@ export class ApiServer {
     }
 
     private async handleSessionStart(req: Req, res: Res): Promise<void> {
-        let body: SessionStartRequest & { tournamentType?: TournamentType };
+        let body: SessionStartRequest & { tournamentType?: TournamentType; publicKey?: string };
         try { body = await req.json() as typeof body; }
         catch { res.status(400).json({ error: 'Invalid JSON body' }); return; }
 
-        const { playerAddress, signature, message, tournamentType } = body;
+        const { playerAddress, signature, message, tournamentType, publicKey } = body;
         if (!playerAddress || !signature || !message) {
             res.status(400).json({ error: 'Missing playerAddress, signature, or message' });
             return;
         }
 
-        if (!this.auth.verifySignature(playerAddress, message, signature)) {
+        if (!this.auth.verifySignature(playerAddress, message, signature, publicKey)) {
             res.status(401).json({ error: 'Invalid signature' });
             return;
         }

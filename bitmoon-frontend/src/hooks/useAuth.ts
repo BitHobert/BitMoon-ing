@@ -14,6 +14,7 @@ export interface AuthActions {
   login: (
     address: string,
     signFn: (msg: string) => Promise<string>,
+    getPublicKeyFn: () => Promise<string>,
     tournamentType?: TournamentType,
   ) => Promise<void>;
   logout: () => void;
@@ -33,16 +34,21 @@ export function useAuth(): AuthState & AuthActions {
   const login = useCallback(async (
     address: string,
     signFn: (msg: string) => Promise<string>,
+    getPublicKeyFn: () => Promise<string>,
     tournamentType?: TournamentType,
   ) => {
     setState((s) => ({ ...s, loggingIn: true, error: null }));
     try {
       const { message } = await getNonce(address);
-      const signature   = await signFn(message);
+      const [signature, publicKey] = await Promise.all([
+        signFn(message),
+        getPublicKeyFn(),
+      ]);
       const { sessionId, token, expiresAt } = await startSession({
         playerAddress: address,
         signature,
         message,
+        publicKey,
         tournamentType,
       });
       // Token stored in React state only — never written to localStorage

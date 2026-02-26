@@ -78,9 +78,9 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
   const ensureToken = useCallback(async (): Promise<string | null> => {
     if (auth.token) return auth.token;
     if (!wallet.address) return null;
-    await auth.login(wallet.address, wallet.signMessage, tournamentType);
+    await auth.login(wallet.address, wallet.signMessage, wallet.getPublicKey, tournamentType);
     return auth.token;
-  }, [auth, wallet.address, wallet.signMessage, tournamentType]);
+  }, [auth, wallet.address, wallet.signMessage, wallet.getPublicKey, tournamentType]);
 
   // ── Pay entry fee ─────────────────────────────────────────────────────────
   const handlePay = useCallback(async () => {

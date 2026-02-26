@@ -1,3 +1,21 @@
+import { networks, type Network } from '@btc-vision/bitcoin';
+
+/**
+ * Resolve the @btc-vision/bitcoin `Network` object from the OPNET_NETWORK env var.
+ *
+ * CRITICAL: OPNet testnet is a Signet fork — you MUST use `networks.opnetTestnet`.
+ * Using `networks.testnet` (Testnet4) will cause address validation and
+ * contract interactions to silently fail.
+ */
+function resolveNetwork(name: string): Network {
+    switch (name) {
+        case 'mainnet':  return networks.bitcoin;
+        case 'testnet':  return networks.opnetTestnet;
+        case 'regtest':  return networks.regtest;
+        default:         return networks.opnetTestnet;
+    }
+}
+
 /**
  * Centralised configuration loaded from environment variables.
  * All values are read once at startup — no runtime re-reads.
@@ -6,8 +24,14 @@ export const Config = {
     /** OPNet JSON-RPC endpoint (used for address validation only) */
     OPNET_RPC_URL: process.env['OPNET_RPC_URL'] ?? 'https://testnet.opnet.org',
 
-    /** Network identifier for @btc-vision/bitcoin */
+    /** Network identifier string (mainnet | testnet | regtest) */
     OPNET_NETWORK: process.env['OPNET_NETWORK'] ?? 'testnet',
+
+    /**
+     * Resolved @btc-vision/bitcoin Network object.
+     * ALWAYS use this instead of manually selecting `networks.testnet` etc.
+     */
+    NETWORK: resolveNetwork(process.env['OPNET_NETWORK'] ?? 'testnet'),
 
     /** MongoDB connection URI */
     MONGO_URI: process.env['MONGO_URI'] ?? 'mongodb://localhost:27017',
@@ -91,6 +115,20 @@ export const Config = {
 
     /** Minimum on-chain confirmations before a payment is considered verified */
     MIN_PAYMENT_CONFIRMATIONS: parseInt(process.env['MIN_PAYMENT_CONFIRMATIONS'] ?? '1', 10),
+
+    // ── Native BTC Prize Distribution ─────────────────────────────────────────
+
+    /** Enable BTC prize payouts from the operator wallet to tournament winners */
+    BTC_PRIZE_ENABLED: process.env['BTC_PRIZE_ENABLED'] === 'true',
+
+    /** BTC prize for 1st place (in satoshis). Default: 50,000 sats (0.0005 BTC) */
+    BTC_PRIZE_1ST_SATS: BigInt(process.env['BTC_PRIZE_1ST_SATS'] ?? '50000'),
+
+    /** BTC prize for 2nd place (in satoshis). Default: 25,000 sats */
+    BTC_PRIZE_2ND_SATS: BigInt(process.env['BTC_PRIZE_2ND_SATS'] ?? '25000'),
+
+    /** BTC prize for 3rd place (in satoshis). Default: 10,000 sats */
+    BTC_PRIZE_3RD_SATS: BigInt(process.env['BTC_PRIZE_3RD_SATS'] ?? '10000'),
 
     // ── Block-based tournament timing ─────────────────────────────────────────
 

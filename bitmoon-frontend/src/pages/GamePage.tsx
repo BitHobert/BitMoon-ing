@@ -40,7 +40,7 @@ export function GamePage({ navigate, ctx }: Props) {
         if (wallet.connected && wallet.address) {
           let token = auth.token;
           if (!token) {
-            await auth.login(wallet.address, wallet.signMessage, ctx.tournamentType);
+            await auth.login(wallet.address, wallet.signMessage, wallet.getPublicKey, ctx.tournamentType);
             token = auth.token;
           }
           if (token && auth.sessionId) {

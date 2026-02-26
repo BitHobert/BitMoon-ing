@@ -8,6 +8,7 @@
         "build": "tsc",
         "start": "node dist/index.js",
         "dev": "tsc --watch & node --watch dist/index.js",
+        "dev:mem": "tsc && node scripts/dev-server.mjs",
         "typecheck": "tsc --noEmit",
         "postinstall": "node scripts/patch-noble-hashes.mjs"
     },
@@ -21,6 +22,7 @@
     },
     "devDependencies": {
         "@types/node": "latest",
+        "mongodb-memory-server": "^11.0.1",
         "typescript": "latest"
     },
     "engines": {
