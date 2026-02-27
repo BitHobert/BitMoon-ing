@@ -1,0 +1,61 @@
+{
+    "name": "@btc-vision/op20",
+    "version": "0.0.1",
+    "description": "OP_20 example smart contract",
+    "main": "index.js",
+    "scripts": {
+        "build:token": "asc src/token/index.ts --target token --measure --uncheckedBehavior never",
+        "build:stablecoin": "asc src/stablecoin/index.ts --target stablecoin --measure --uncheckedBehavior never",
+        "build:peggedcoin": "asc src/pegged-token/index.ts --target peggedcoin --measure --uncheckedBehavior never",
+        "build:oraclecoin": "asc src/multi-oracle-stablecoin/index.ts --target oraclecoin --measure --uncheckedBehavior never",
+        "build:nft": "asc src/nft/index.ts --target nft --measure --uncheckedBehavior never",
+        "build:registry": "asc src/registry/index.ts --target registry --measure --uncheckedBehavior never",
+        "build:btc-resolver": "asc src/btc-resolver/index.ts --target btc-resolver --measure --uncheckedBehavior never",
+        "deploy:token": "tsx --tsconfig tsconfig.scripts.json scripts/deploy-token.ts",
+        "test": "asp --config as-pect.config.js --verbose --no-logo",
+        "test:ci": "asp --config as-pect.config.js --summary --no-logo"
+    },
+    "author": "BlobMaster41",
+    "license": "MIT",
+    "devDependencies": {
+        "@btc-vision/as-covers-assembly": "^0.4.4",
+        "@btc-vision/as-covers-transform": "^0.4.4",
+        "@btc-vision/as-pect-assembly": "^8.2.0",
+        "@btc-vision/as-pect-cli": "^8.2.0",
+        "@btc-vision/as-pect-transform": "^8.2.0",
+        "@types/node": "^25.3.0",
+        "prettier": "^3.8.1"
+    },
+    "keywords": [
+        "bitcoin",
+        "smart",
+        "contract",
+        "runtime",
+        "opnet",
+        "OP_NET",
+        "wrapped bitcoin",
+        "wbtc"
+    ],
+    "resolutions": {
+        "@btc-vision/btc-runtime": "^1.11.0-beta.1"
+    },
+    "homepage": "https://opnet.org",
+    "type": "module",
+    "dependencies": {
+        "@assemblyscript/loader": "^0.28.9",
+        "@btc-vision/as-bignum": "^0.1.2",
+        "@btc-vision/assemblyscript": "^0.29.2",
+        "@btc-vision/bitcoin": "^7.0.0-rc.6",
+        "@btc-vision/btc-runtime": "^1.11.0-rc.9",
+        "@btc-vision/opnet-transform": "^1.2.0",
+        "@btc-vision/transaction": "^1.8.0-rc.10",
+        "@eslint/js": "^10.0.1",
+        "eslint": "^10.0.1",
+        "gulplog": "^2.2.0",
+        "opnet": "^1.8.1-rc.17",
+        "ts-node": "^10.9.2",
+        "tsx": "^4.21.0",
+        "typescript": "^5.9.3",
+        "typescript-eslint": "^8.56.0"
+    }
+}

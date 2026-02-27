@@ -7,7 +7,7 @@
  * Output: the three OPERATOR_* lines to paste into bitmoon-backend/.env
  */
 
-import { Mnemonic, MLDSASecurityLevel } from '@btc-vision/transaction';
+import { Mnemonic, MLDSASecurityLevel, AddressTypes } from '@btc-vision/transaction';
 import { networks } from '@btc-vision/bitcoin';
 
 const phrase = process.env['MNEMONIC'] ?? '';
@@ -18,7 +18,7 @@ if (!phrase.trim()) {
 }
 
 const mnemonic = new Mnemonic(phrase.trim(), '', networks.opnetTestnet, MLDSASecurityLevel.LEVEL2);
-const wallet   = mnemonic.derive(0);
+const wallet   = mnemonic.deriveOPWallet(AddressTypes.P2TR, 0);
 
 console.log('\n=== BitMoon Operator Keys (TESTNET — keep secret!) ===\n');
 console.log(`OPERATOR_P2TR_ADDRESS=${wallet.p2tr}`);
@@ -28,5 +28,5 @@ console.log('\n--- Copy the 3 lines above into bitmoon-backend/.env ---\n');
 console.log('Fund this address with testnet BTC before running deploy:');
 console.log(wallet.p2tr);
 
-mnemonic.zeroize();
-wallet.zeroize();
+if (typeof mnemonic.zeroize === 'function') mnemonic.zeroize();
+if (typeof wallet.zeroize === 'function') wallet.zeroize();

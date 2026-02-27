@@ -1,25 +1,15 @@
 /**
- * deploy.ts — Deploy PrizeDistributor.wasm to OPNet testnet.
+ * deploy-token.ts — Deploy tBTC OP-20 token to OPNet testnet.
  *
  * Usage:
- *   MNEMONIC="..." \
- *   ENTRY_TOKEN_ADDRESS=<tBTC_OP20_contract> \
- *   DEV_WALLET=opt1ptz9xq6xsxed58jxu48e69a2fmhkks5hkzx8hhpcc8g7cx9asphus725zs7 \
- *   npm run deploy
+ *   MNEMONIC="..." npm run deploy:token
  *
- * Output: PRIZE_CONTRACT_ADDRESS to paste into bitmoon-backend/.env
- *
- * Prerequisites:
- *   1. Run `npm run keygen` and copy OPERATOR_* values into bitmoon-backend/.env
- *   2. Fund the operator P2TR address with testnet BTC
- *   3. Know the tBTC OP-20 contract address on OPNet testnet
+ * Output: ENTRY_TOKEN_ADDRESS to paste into bitmoon-backend/.env
  */
 
 import {
     Mnemonic,
     TransactionFactory,
-    BinaryWriter,
-    Address,
     MLDSASecurityLevel,
     AddressTypes,
     type IDeploymentParameters,
@@ -35,61 +25,43 @@ import { fileURLToPath } from 'node:url';
 const NETWORK = networks.opnetTestnet;
 const RPC_URL = 'https://testnet.opnet.org';
 
-const phrase      = process.env['MNEMONIC']            ?? '';
-const tbtcAddress = process.env['ENTRY_TOKEN_ADDRESS'] ?? '';
-const devWallet   = process.env['DEV_WALLET']          ?? 'opt1ptz9xq6xsxed58jxu48e69a2fmhkks5hkzx8hhpcc8g7cx9asphus725zs7';
-
+const phrase = process.env['MNEMONIC'] ?? '';
 if (!phrase.trim()) {
     console.error('Error: MNEMONIC env var is required.');
-    process.exit(1);
-}
-if (!tbtcAddress.trim()) {
-    console.error('Error: ENTRY_TOKEN_ADDRESS env var is required (tBTC OP-20 contract on testnet).');
     process.exit(1);
 }
 
 // ── Wallet ────────────────────────────────────────────────────────────────────
 
 const mnemonic = new Mnemonic(phrase.trim(), '', NETWORK, MLDSASecurityLevel.LEVEL2);
-const wallet   = mnemonic.deriveOPWallet(AddressTypes.P2TR, 0);
-console.log(`\nDeploying from: ${wallet.p2tr}`);
+const wallet = mnemonic.deriveOPWallet(AddressTypes.P2TR, 0);
+console.log(`\nDeploying tBTC token from: ${wallet.p2tr}`);
 
 // ── Provider & factory ────────────────────────────────────────────────────────
 
 const provider = new JSONRpcProvider({ url: RPC_URL, network: NETWORK });
-const factory  = new TransactionFactory();
-
-// ── Constructor calldata ──────────────────────────────────────────────────────
-//
-// PrizeDistributor.onDeployment reads:
-//   calldata.readAddress()  → tokenAddress (32 bytes, MLDSA key hash)
-//   calldata.readAddress()  → devWallet    (32 bytes, MLDSA key hash)
-
-const writer = new BinaryWriter();
-writer.writeAddress(Address.fromString(tbtcAddress.trim()));
-writer.writeAddress(Address.fromString(devWallet.trim()));
-const calldata = writer.getBuffer();
-console.log(`Token address : ${tbtcAddress}`);
-console.log(`Dev wallet    : ${devWallet}`);
-console.log(`Calldata size : ${calldata.length} bytes (expected 64)`);
+const factory = new TransactionFactory();
 
 // ── Load WASM ─────────────────────────────────────────────────────────────────
 
 const wasmPath = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
-    '../build/PrizeDistributor.wasm',
+    '../build/MyToken.wasm',
 );
 if (!fs.existsSync(wasmPath)) {
-    console.error(`WASM not found at ${wasmPath} — run \`npm run build\` first.`);
+    console.error(`WASM not found at ${wasmPath} — run \`npm run build:token\` first.`);
     process.exit(1);
 }
 const bytecode = fs.readFileSync(wasmPath);
-console.log(`WASM loaded   : ${bytecode.length} bytes`);
+console.log(`WASM loaded: ${bytecode.length} bytes`);
 
 // ── UTXOs ─────────────────────────────────────────────────────────────────────
 
 console.log('\nFetching UTXOs...');
-const utxos = await provider.utxoManager.getUTXOs({ address: wallet.p2tr });
+const utxos = await provider.utxoManager.getUTXOs({
+    address: wallet.p2tr,
+    optimize: false,
+});
 if (utxos.length === 0) {
     console.error(`No UTXOs found for ${wallet.p2tr}`);
     console.error('Fund this address with testnet BTC, then retry.');
@@ -115,30 +87,29 @@ const deploymentParams: IDeploymentParameters = {
     priorityFee:                 0n,
     gasSatFee:                   10_000n,
     bytecode,
-    calldata,
+    calldata:                    new Uint8Array(0),
     challenge,
     linkMLDSAPublicKeyToAddress: true,
     revealMLDSAPublicKey:        true,
 };
 
 const deployment = await factory.signDeployment(deploymentParams);
-console.log(`\nContract address : ${deployment.contractAddress}`);
+console.log(`\ntBTC Token address: ${deployment.contractAddress}`);
 
 // ── Broadcast ─────────────────────────────────────────────────────────────────
 
 console.log('Broadcasting funding transaction...');
 const r1 = await provider.sendRawTransaction(deployment.transaction[0]);
-console.log(`Funding TX ID    : ${r1.result}`);
+console.log(`Funding TX ID : ${r1.result}`);
 
 console.log('Broadcasting deploy transaction...');
 const r2 = await provider.sendRawTransaction(deployment.transaction[1]);
-console.log(`Deploy  TX ID    : ${r2.result}`);
+console.log(`Deploy  TX ID : ${r2.result}`);
 
 // ── Output ────────────────────────────────────────────────────────────────────
 
-console.log('\n=== Add these to bitmoon-backend/.env ===\n');
-console.log(`PRIZE_CONTRACT_ADDRESS=${deployment.contractAddress}`);
-console.log(`ENTRY_TOKEN_ADDRESS=${tbtcAddress.trim()}`);
+console.log('\n=== Add this to bitmoon-backend/.env ===\n');
+console.log(`ENTRY_TOKEN_ADDRESS=${deployment.contractAddress}`);
 console.log(`\nVerify at: https://testnet.opnet.org/tx/${r2.result}`);
 
 if (typeof mnemonic.zeroize === 'function') mnemonic.zeroize();
