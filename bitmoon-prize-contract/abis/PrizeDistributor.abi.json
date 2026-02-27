@@ -1,0 +1,191 @@
+{
+    "functions": [
+        {
+            "name": "getPoolInfo",
+            "type": "Function",
+            "inputs": [
+                {
+                    "name": "tournamentType",
+                    "type": "UINT8"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "mainPool",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "stagingCarry",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "activeCarry",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "lastDistKey",
+                    "type": "UINT256"
+                }
+            ]
+        },
+        {
+            "name": "getOperator",
+            "type": "Function",
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "operator",
+                    "type": "ADDRESS"
+                }
+            ]
+        },
+        {
+            "name": "getTokenAddress",
+            "type": "Function",
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "token",
+                    "type": "ADDRESS"
+                }
+            ]
+        },
+        {
+            "name": "getSponsorCount",
+            "type": "Function",
+            "inputs": [
+                {
+                    "name": "tournamentType",
+                    "type": "UINT8"
+                },
+                {
+                    "name": "periodKey",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "count",
+                    "type": "UINT256"
+                }
+            ]
+        },
+        {
+            "name": "recordEntry",
+            "type": "Function",
+            "inputs": [
+                {
+                    "name": "tournamentType",
+                    "type": "UINT8"
+                },
+                {
+                    "name": "periodKey",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "amount",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        },
+        {
+            "name": "distributePrize",
+            "type": "Function",
+            "inputs": [
+                {
+                    "name": "tournamentType",
+                    "type": "UINT8"
+                },
+                {
+                    "name": "periodKey",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "w1",
+                    "type": "ADDRESS"
+                },
+                {
+                    "name": "w2",
+                    "type": "ADDRESS"
+                },
+                {
+                    "name": "w3",
+                    "type": "ADDRESS"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        },
+        {
+            "name": "setOperator",
+            "type": "Function",
+            "inputs": [
+                {
+                    "name": "newOperator",
+                    "type": "ADDRESS"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        },
+        {
+            "name": "setDevWallet",
+            "type": "Function",
+            "inputs": [
+                {
+                    "name": "newDevWallet",
+                    "type": "ADDRESS"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        },
+        {
+            "name": "depositBonus",
+            "type": "Function",
+            "inputs": [
+                {
+                    "name": "tournamentType",
+                    "type": "UINT8"
+                },
+                {
+                    "name": "periodKey",
+                    "type": "UINT256"
+                },
+                {
+                    "name": "tokenAddress",
+                    "type": "ADDRESS"
+                },
+                {
+                    "name": "amount",
+                    "type": "UINT256"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "success",
+                    "type": "BOOL"
+                }
+            ]
+        }
+    ],
+    "events": []
+}

@@ -6,16 +6,12 @@ import {
     BytesWriter,
     Calldata,
     EMPTY_POINTER,
-    encodeSelector,
-    OP_NET,
+    ReentrancyGuard,
     Revert,
     SafeMath,
-    SELECTOR_BYTE_LENGTH,
     StoredAddress,
     StoredU256,
     TransferHelper,
-    U256_BYTE_LENGTH,
-    U8_BYTE_LENGTH,
 } from '@btc-vision/btc-runtime/runtime';
 import { EntryRecordedEvent } from './events/EntryRecordedEvent';
 import { PrizeDistributedEvent } from './events/PrizeDistributedEvent';
@@ -61,14 +57,6 @@ const sponsorAmountPointer: u16 = Blockchain.nextPointer; // 17
 
 // sponsorToken[type, periodKey, slot]  → u256 (sponsor OP-20 token address, 20 bytes left-padded)
 const sponsorTokenPointer:  u16 = Blockchain.nextPointer; // 18
-
-// ── Method selectors ──────────────────────────────────────────────────────────
-
-const RECORD_ENTRY_SELECTOR:     u32 = encodeSelector('recordEntry(uint8,uint256,uint256)');
-const DISTRIBUTE_PRIZE_SELECTOR: u32 = encodeSelector('distributePrize(uint8,uint256,address,address,address)');
-const SET_OPERATOR_SELECTOR:     u32 = encodeSelector('setOperator(address)');
-const SET_DEV_WALLET_SELECTOR:   u32 = encodeSelector('setDevWallet(address)');
-const DEPOSIT_BONUS_SELECTOR:    u32 = encodeSelector('depositBonus(uint8,uint256,address,uint256)');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -167,7 +155,7 @@ function u256ToAddress(val: u256): Address {
  *  Dev cut: transfer devPool to devWallet; clear devPool.
  */
 @final
-export class PrizeDistributor extends OP_NET {
+export class PrizeDistributor extends ReentrancyGuard {
 
     // ── Storage fields ────────────────────────────────────────────────────────
 
@@ -236,30 +224,6 @@ export class PrizeDistributor extends OP_NET {
         this._operator.value     = Blockchain.tx.sender;
     }
 
-    // ── Dispatch ──────────────────────────────────────────────────────────────
-
-    public override execute(method: u32, calldata: Calldata): BytesWriter {
-        switch (method) {
-            case RECORD_ENTRY_SELECTOR:
-                return this._recordEntry(calldata);
-
-            case DISTRIBUTE_PRIZE_SELECTOR:
-                return this._distributePrize(calldata);
-
-            case SET_OPERATOR_SELECTOR:
-                return this._setOperator(calldata);
-
-            case SET_DEV_WALLET_SELECTOR:
-                return this._setDevWallet(calldata);
-
-            case DEPOSIT_BONUS_SELECTOR:
-                return this._depositBonus(calldata);
-
-            default:
-                return super.execute(method, calldata);
-        }
-    }
-
     // ── Guards ────────────────────────────────────────────────────────────────
 
     private requireOperator(): void {
@@ -298,7 +262,77 @@ export class PrizeDistributor extends OP_NET {
         return this._lastDistKey2;
     }
 
-    // ── Method implementations ─────────────────────────────────────────────────
+    // ── View methods (read-only) ────────────────────────────────────────────────
+
+    /**
+     * getPoolInfo(tournamentType: u8)
+     * Returns (mainPool, stagingCarry, activeCarry, lastDistKey) for the given tournament type.
+     */
+    @method({ name: 'tournamentType', type: ABIDataTypes.UINT8 })
+    @returns(
+        { name: 'mainPool', type: ABIDataTypes.UINT256 },
+        { name: 'stagingCarry', type: ABIDataTypes.UINT256 },
+        { name: 'activeCarry', type: ABIDataTypes.UINT256 },
+        { name: 'lastDistKey', type: ABIDataTypes.UINT256 },
+    )
+    public getPoolInfo(calldata: Calldata): BytesWriter {
+        const tournamentType = calldata.readU8();
+        if (tournamentType > 2) throw new Revert('PrizeDistributor: invalid tournament type');
+
+        const writer = new BytesWriter(128); // 4 × 32 bytes
+        writer.writeU256(this.mainPool(tournamentType).value);
+        writer.writeU256(this.stagingCarry(tournamentType).value);
+        writer.writeU256(this.activeCarry(tournamentType).value);
+        writer.writeU256(this.lastDistKey(tournamentType).value);
+        return writer;
+    }
+
+    /**
+     * getOperator() — returns the current operator address.
+     */
+    @method()
+    @returns({ name: 'operator', type: ABIDataTypes.ADDRESS })
+    public getOperator(calldata: Calldata): BytesWriter {
+        const writer = new BytesWriter(ADDRESS_BYTE_LENGTH);
+        writer.writeAddress(this._operator.value);
+        return writer;
+    }
+
+    /**
+     * getTokenAddress() — returns the entry fee token contract address.
+     */
+    @method()
+    @returns({ name: 'token', type: ABIDataTypes.ADDRESS })
+    public getTokenAddress(calldata: Calldata): BytesWriter {
+        const writer = new BytesWriter(ADDRESS_BYTE_LENGTH);
+        writer.writeAddress(this._tokenAddress.value);
+        return writer;
+    }
+
+    /**
+     * getSponsorCount(tournamentType: u8, periodKey: u256)
+     * Returns the number of sponsor bonus slots deposited for the given period.
+     */
+    @method(
+        { name: 'tournamentType', type: ABIDataTypes.UINT8 },
+        { name: 'periodKey', type: ABIDataTypes.UINT256 },
+    )
+    @returns({ name: 'count', type: ABIDataTypes.UINT256 })
+    public getSponsorCount(calldata: Calldata): BytesWriter {
+        const tournamentType = calldata.readU8();
+        const periodKey      = calldata.readU256();
+
+        if (tournamentType > 2) throw new Revert('PrizeDistributor: invalid tournament type');
+
+        const countKey = makeSponsorKey(tournamentType, periodKey, COUNT_SENTINEL);
+        const count    = new StoredU256(sponsorCountPointer, countKey).value;
+
+        const writer = new BytesWriter(32);
+        writer.writeU256(count);
+        return writer;
+    }
+
+    // ── Write methods ─────────────────────────────────────────────────────────────
 
     /**
      * recordEntry(tournamentType: u8, periodKey: u256, amount: u256)
@@ -311,7 +345,13 @@ export class PrizeDistributor extends OP_NET {
      *   stagingCarry[type] += amount * 1500 / 10000  (15 %)
      *   devPool            += amount - main - staging (5 %, remainder avoids rounding loss)
      */
-    private _recordEntry(calldata: Calldata): BytesWriter {
+    @method(
+        { name: 'tournamentType', type: ABIDataTypes.UINT8 },
+        { name: 'periodKey', type: ABIDataTypes.UINT256 },
+        { name: 'amount', type: ABIDataTypes.UINT256 },
+    )
+    @returns({ name: 'success', type: ABIDataTypes.BOOL })
+    public recordEntry(calldata: Calldata): BytesWriter {
         this.requireOperator();
 
         const tournamentType = calldata.readU8();
@@ -346,7 +386,9 @@ export class PrizeDistributor extends OP_NET {
 
         this.emitEvent(new EntryRecordedEvent(tournamentType, periodKey, amount));
 
-        return new BytesWriter(0);
+        const w = new BytesWriter(1);
+        w.writeBoolean(true);
+        return w;
     }
 
     /**
@@ -369,7 +411,15 @@ export class PrizeDistributor extends OP_NET {
      * Dev cut:
      *   transfer devPool → devWallet; clear devPool
      */
-    private _distributePrize(calldata: Calldata): BytesWriter {
+    @method(
+        { name: 'tournamentType', type: ABIDataTypes.UINT8 },
+        { name: 'periodKey', type: ABIDataTypes.UINT256 },
+        { name: 'w1', type: ABIDataTypes.ADDRESS },
+        { name: 'w2', type: ABIDataTypes.ADDRESS },
+        { name: 'w3', type: ABIDataTypes.ADDRESS },
+    )
+    @returns({ name: 'success', type: ABIDataTypes.BOOL })
+    public distributePrize(calldata: Calldata): BytesWriter {
         this.requireOperator();
 
         const tournamentType = calldata.readU8();
@@ -469,29 +519,39 @@ export class PrizeDistributor extends OP_NET {
 
         this.emitEvent(new PrizeDistributedEvent(tournamentType, periodKey, w1, w2, w3, prizeTotal));
 
-        return new BytesWriter(0);
+        const w = new BytesWriter(1);
+        w.writeBoolean(true);
+        return w;
     }
 
     /**
      * setOperator(newOperator: address) — deployer only
      */
-    private _setOperator(calldata: Calldata): BytesWriter {
+    @method({ name: 'newOperator', type: ABIDataTypes.ADDRESS })
+    @returns({ name: 'success', type: ABIDataTypes.BOOL })
+    public setOperator(calldata: Calldata): BytesWriter {
         this.requireDeployer();
         const newOperator = calldata.readAddress();
         if (isZeroAddress(newOperator)) throw new Revert('PrizeDistributor: zero operator');
         this._operator.value = newOperator;
-        return new BytesWriter(0);
+        const w = new BytesWriter(1);
+        w.writeBoolean(true);
+        return w;
     }
 
     /**
      * setDevWallet(newDevWallet: address) — deployer only
      */
-    private _setDevWallet(calldata: Calldata): BytesWriter {
+    @method({ name: 'newDevWallet', type: ABIDataTypes.ADDRESS })
+    @returns({ name: 'success', type: ABIDataTypes.BOOL })
+    public setDevWallet(calldata: Calldata): BytesWriter {
         this.requireDeployer();
         const newDevWallet = calldata.readAddress();
         if (isZeroAddress(newDevWallet)) throw new Revert('PrizeDistributor: zero dev wallet');
         this._devWallet.value = newDevWallet;
-        return new BytesWriter(0);
+        const w = new BytesWriter(1);
+        w.writeBoolean(true);
+        return w;
     }
 
     /**
@@ -508,7 +568,14 @@ export class PrizeDistributor extends OP_NET {
      * At distributePrize() time, all bonus slots for the period are transferred to w1 (1st place).
      * If there is no valid winner, bonus tokens remain locked in the contract.
      */
-    private _depositBonus(calldata: Calldata): BytesWriter {
+    @method(
+        { name: 'tournamentType', type: ABIDataTypes.UINT8 },
+        { name: 'periodKey', type: ABIDataTypes.UINT256 },
+        { name: 'tokenAddress', type: ABIDataTypes.ADDRESS },
+        { name: 'amount', type: ABIDataTypes.UINT256 },
+    )
+    @returns({ name: 'success', type: ABIDataTypes.BOOL })
+    public depositBonus(calldata: Calldata): BytesWriter {
         this.requireOperator();
 
         const tournamentType = calldata.readU8();
@@ -558,6 +625,8 @@ export class PrizeDistributor extends OP_NET {
             tournamentType, periodKey, tokenAsU256, amount, slotIndex,
         ));
 
-        return new BytesWriter(0);
+        const w = new BytesWriter(1);
+        w.writeBoolean(true);
+        return w;
     }
 }
