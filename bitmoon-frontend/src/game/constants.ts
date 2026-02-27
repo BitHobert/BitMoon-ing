@@ -15,7 +15,7 @@ export const BULLET_SPEED      = 10;     // px/frame
 // ── Planet / Moon ─────────────────────────────────────────────────────────────
 export const MOON_SPEED  = 1.2;   // px/frame (slow, player must protect it)
 export const MOON_Y_LANE = 0.35;  // fraction of canvas height
-export const MOON_RADIUS = 44;    // collision radius px (doubled)
+export const MOON_RADIUS = 88;    // collision radius px (doubled again)
 
 export interface PlanetConfig {
   readonly glyph:    string;
@@ -25,12 +25,12 @@ export interface PlanetConfig {
 }
 
 export const PLANET_POOL: PlanetConfig[] = [
-  { glyph: '🌕', penalty:  7_000, label: 'MOON'      },
-  { glyph: '🌍', penalty: 10_000, label: 'NEBULA',    spriteId: 'sprites/planet-nebula.png'  },
-  { glyph: '🌎', penalty: 15_000, label: 'INFERNO',   spriteId: 'sprites/planet-inferno.png' },
-  { glyph: '🌏', penalty: 20_000, label: 'EARTH'     },
-  { glyph: '🪐', penalty: 25_000, label: 'SATURN',    spriteId: 'sprites/planet-saturn.png'  },
-  { glyph: '🌑', penalty: 40_000, label: 'DARK MOON' },
+  { glyph: '🌕', penalty:  7_000, label: 'MOON',      spriteId: 'sprites/planet-moon.png'     },
+  { glyph: '🌍', penalty: 10_000, label: 'NEBULA',    spriteId: 'sprites/planet-nebula.png'   },
+  { glyph: '🌎', penalty: 15_000, label: 'INFERNO',   spriteId: 'sprites/planet-inferno.png'  },
+  { glyph: '🌏', penalty: 20_000, label: 'EARTH',     spriteId: 'sprites/planet-earth.png'    },
+  { glyph: '🪐', penalty: 25_000, label: 'SATURN',    spriteId: 'sprites/planet-saturn.png'   },
+  { glyph: '🌑', penalty: 40_000, label: 'DARK MOON', spriteId: 'sprites/planet-darkmoon.png' },
 ];
 
 export function randomPlanet(): PlanetConfig {
@@ -52,10 +52,10 @@ export interface TierConfig {
 }
 
 export const TIER_CONFIGS: Record<TierNumber, TierConfig> = {
-  1: { tier: 1, glyph: '👾', hp: 1, basePoints: 100,  burnUnits: 100_000_000n,    speedFactor: 1.0, firesBack: false, ySine: 0  },
-  2: { tier: 2, glyph: '🛸', hp: 2, basePoints: 300,  burnUnits: 500_000_000n,    speedFactor: 1.2, firesBack: false, ySine: 30 },
-  3: { tier: 3, glyph: '🤖', hp: 3, basePoints: 750,  burnUnits: 1_000_000_000n,  speedFactor: 1.4, firesBack: true,  ySine: 50, sprite: 'sprites/enemy3.png' },
-  4: { tier: 4, glyph: '👻', hp: 5, basePoints: 1500, burnUnits: 5_000_000_000n,  speedFactor: 1.6, firesBack: true,  ySine: 20, sprite: 'sprites/enemy4.png' },
+  1: { tier: 1, glyph: '👾', hp: 1, basePoints: 100,  burnUnits: 100_000_000n,    speedFactor: 1.0, firesBack: false, ySine: 0,  sprite: 'sprites/enemy1.png' },
+  2: { tier: 2, glyph: '🛸', hp: 2, basePoints: 300,  burnUnits: 500_000_000n,    speedFactor: 1.2, firesBack: false, ySine: 30, sprite: 'sprites/enemy2.png' },
+  3: { tier: 3, glyph: '🐍', hp: 3, basePoints: 750,  burnUnits: 1_000_000_000n,  speedFactor: 1.4, firesBack: true,  ySine: 50, sprite: 'sprites/enemy3.png' },
+  4: { tier: 4, glyph: '🚀', hp: 5, basePoints: 1500, burnUnits: 5_000_000_000n,  speedFactor: 1.6, firesBack: true,  ySine: 20, sprite: 'sprites/enemy4.png' },
   5: { tier: 5, glyph: '💀', hp: 8, basePoints: 3000, burnUnits: 10_000_000_000n, speedFactor: 2.0, firesBack: true,  ySine: 0,  sprite: 'sprites/enemy5.png' },
 };
 
@@ -89,6 +89,7 @@ export const BOSS_POOL: BossConfig[] = [
     fireRate:     35,
     bulletSpread: 1,
     duration:     1200,   // 20 s at 60 fps
+    sprite:       'sprites/boss-devourer.png',
   },
   {
     name:         'ABDUCTOR',
@@ -146,7 +147,7 @@ export function getBossConfig(waveNum: number): BossConfig {
 
 // ── Powerups ──────────────────────────────────────────────────────────────────
 
-export type PowerupKind = 'weapon' | 'shield';
+export type PowerupKind = 'weapon' | 'laser' | 'shield';
 
 export interface PowerupConfig {
   readonly kind:       PowerupKind;
@@ -154,11 +155,13 @@ export interface PowerupConfig {
   readonly label:      string;
   readonly dropChance: number;   // probability per enemy kill
   readonly duration:   number;   // frames (0 = one-shot)
+  readonly maxStacks?: number;   // max stackable count (shield only)
 }
 
 export const POWERUP_CONFIGS: Record<PowerupKind, PowerupConfig> = {
-  weapon: { kind: 'weapon', glyph: '⚡', label: 'WEAPON BOOST', dropChance: 0.15, duration: 480 }, // 8 s
-  shield: { kind: 'shield', glyph: '💊', label: 'SHIELD',       dropChance: 0.10, duration: 0   }, // one-shot
+  weapon: { kind: 'weapon', glyph: '⚡', label: 'WEAPON BOOST', dropChance: 0.10, duration: 480 }, // 8 s
+  laser:  { kind: 'laser',  glyph: '🔴', label: 'LASER',        dropChance: 0.10, duration: 300 }, // 5 s
+  shield: { kind: 'shield', glyph: '💊', label: 'SHIELD',       dropChance: 0.05, duration: 0, maxStacks: 2 },
 };
 
 // ── Wave configuration ────────────────────────────────────────────────────────

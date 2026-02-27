@@ -21,11 +21,13 @@ export function GamePage({ navigate, ctx }: Props) {
   const [loading,       setLoading]       = useState(true);
   const [currentPlanet,  setCurrentPlanet]  = useState<PlanetConfig | null>(null);
   const [weaponFrames,   setWeaponFrames]   = useState(0);
-  const [shieldActive,   setShieldActive]   = useState(false);
+  const [laserFrames,    setLaserFrames]    = useState(0);
+  const [shieldCount,    setShieldCount]    = useState(0);
 
-  const handlePowerup = useCallback((_kind: PowerupKind | null, wf: number, sa: boolean) => {
+  const handlePowerup = useCallback((_kind: PowerupKind | null, wf: number, lf: number, sc: number) => {
     setWeaponFrames(wf);
-    setShieldActive(sa);
+    setLaserFrames(lf);
+    setShieldCount(sc);
   }, []);
 
   // Session is created in useEffect; token may come from auth context or be created fresh
@@ -132,7 +134,7 @@ export function GamePage({ navigate, ctx }: Props) {
       </div>
 
       {/* Active booster strip */}
-      {(weaponFrames > 0 || shieldActive) && (
+      {(weaponFrames > 0 || laserFrames > 0 || shieldCount > 0) && (
         <div style={{
           padding: '4px 20px',
           background: 'rgba(10,10,30,0.97)',
@@ -148,9 +150,14 @@ export function GamePage({ navigate, ctx }: Props) {
               ⚡ WEAPON BOOST — {Math.ceil(weaponFrames / 60)}s
             </span>
           )}
-          {shieldActive && (
+          {laserFrames > 0 && (
+            <span style={{ color: '#ff4444' }}>
+              🔴 LASER — {Math.ceil(laserFrames / 60)}s
+            </span>
+          )}
+          {shieldCount > 0 && (
             <span style={{ color: 'var(--color-blue)' }}>
-              🛡 SHIELD ACTIVE
+              🛡 SHIELD ×{shieldCount}
             </span>
           )}
         </div>

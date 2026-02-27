@@ -14,7 +14,7 @@ interface Props {
   onLives:    (lives: number)  => void;
   onKill:     (tier: TierNumber, points: number, mult: number) => void;
   onPlanet:   (planet: PlanetConfig | null) => void;
-  onPowerup:  (kind: PowerupKind | null, weaponFrames: number, shieldActive: boolean) => void;
+  onPowerup:  (kind: PowerupKind | null, weaponFrames: number, laserFrames: number, shieldCount: number) => void;
 }
 
 export function GameCanvas({ onGameOver, onScore, onWave, onLives, onKill, onPlanet, onPowerup }: Props) {

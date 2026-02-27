@@ -103,7 +103,8 @@ export interface GameState {
   bullets:    BulletEntity[];
   particles:  ParticleEntity[];
   weaponFrames:  number;   // frames remaining on weapon boost (0 = inactive)
-  shieldActive:  boolean;  // absorbs next hit
+  laserFrames:   number;   // frames remaining on laser beam (0 = inactive)
+  shieldCount:   number;   // stacked shields (0–2), each absorbs one hit
   nextSpawns: WaveSpawn[];             // queued spawns for current wave
   spawnTick:  number;        // tick when wave started (for spawn timing)
   shootCooldown: number;
@@ -122,5 +123,5 @@ export interface GameCallbacks {
   onGameOver: (finalScore: number, burned: bigint) => void;
   onKill:     (tier: TierNumber, points: number, scarcityMultiplier: number) => void;
   onPlanet:   (planet: PlanetConfig | null) => void;
-  onPowerup:  (kind: PowerupKind | null, weaponFrames: number, shieldActive: boolean) => void;
+  onPowerup:  (kind: PowerupKind | null, weaponFrames: number, laserFrames: number, shieldCount: number) => void;
 }

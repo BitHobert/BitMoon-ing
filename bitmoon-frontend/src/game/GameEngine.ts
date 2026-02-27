@@ -124,7 +124,8 @@ export class GameEngine {
       nextPowerupId:  0,
       moonSpawned:    false,
       weaponFrames:   0,
-      shieldActive:   false,
+      laserFrames:    0,
+      shieldCount:    0,
     };
   }
 
@@ -217,7 +218,12 @@ export class GameEngine {
     if (s.player.invincibleFrames > 0) s.player.invincibleFrames--;
     if (s.weaponFrames > 0) {
       s.weaponFrames--;
-      if (s.weaponFrames === 0) this.cbs.onPowerup(null, 0, s.shieldActive);
+      if (s.weaponFrames === 0) this.cbs.onPowerup(null, 0, s.laserFrames, s.shieldCount);
+    }
+    if (s.laserFrames > 0) {
+      s.laserFrames--;
+      this.fireLaser();
+      if (s.laserFrames === 0) this.cbs.onPowerup(null, s.weaponFrames, 0, s.shieldCount);
     }
   }
 
@@ -231,7 +237,7 @@ export class GameEngine {
     if (!s.moonSpawned && s.nextSpawns.length > 0 && elapsedTicks >= s.nextSpawns[0].delayFrames + 30) {
       const planet = s.currentPlanet;
       s.moon = {
-        x:           -MOON_RADIUS * 2,
+        x:           CANVAS_W + MOON_RADIUS * 2,
         y:           CANVAS_H * MOON_Y_LANE,
         alive:       true,
         flashFrames: 0,
@@ -337,6 +343,106 @@ export class GameEngine {
     s.shootCooldown = boosted ? Math.ceil(PLAYER_SHOOT_RATE / 2) : PLAYER_SHOOT_RATE;
   }
 
+  // ── Laser beam (continuous damage every 6 frames) ────────────────────────────
+
+  private laserTarget: { x: number; y: number } | null = null;  // cached for rendering
+
+  private fireLaser(): void {
+    const s = this.state;
+
+    // Find nearest target (same logic as autoShoot)
+    let targetX: number | null = null;
+    let targetY: number | null = null;
+    let nearest: EnemyEntity | null = null;
+    let bestDist = Infinity;
+    for (const e of s.enemies) {
+      if (!e.alive || e.invulnerable) continue;
+      const dx = e.x - s.player.x;
+      const dy = e.y - s.player.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < bestDist) { bestDist = dist; nearest = e; }
+    }
+    if (nearest) { targetX = nearest.x; targetY = nearest.y; }
+    else if (s.boss?.alive && s.boss.x > 0) { targetX = s.boss.x; targetY = s.boss.y; }
+
+    if (targetX === null || targetY === null) { this.laserTarget = null; return; }
+
+    // Beam direction
+    const dx = targetX - s.player.x;
+    const dy = targetY - s.player.y;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const nx = dx / len;
+    const ny = dy / len;
+
+    // Cache end point for rendering (extend beam to screen edge)
+    const beamLen = Math.max(CANVAS_W, CANVAS_H) * 1.5;
+    this.laserTarget = { x: s.player.x + nx * beamLen, y: s.player.y + ny * beamLen };
+
+    // Deal damage every 6 frames (10 hits/sec at 60fps)
+    if (s.tick % 6 !== 0) return;
+
+    // Check all enemies along the beam (piercing)
+    for (const e of s.enemies) {
+      if (!e.alive || e.invulnerable) continue;
+      // Point-to-line distance
+      const ex = e.x - s.player.x;
+      const ey = e.y - s.player.y;
+      const proj = ex * nx + ey * ny;
+      if (proj < 0) continue;  // behind player
+      const perpX = ex - proj * nx;
+      const perpY = ey - proj * ny;
+      const dist = Math.sqrt(perpX * perpX + perpY * perpY);
+      if (dist < 20) {  // beam width hit radius
+        e.hp--;
+        e.flashFrames = 4;
+        if (e.hp <= 0) {
+          e.alive = false;
+          const pts = Math.round(e.cfg.basePoints * this.scarcityMultiplier);
+          s.score += pts;
+          s.kills++;
+          s.burned += e.cfg.burnUnits;
+          this.spawnExplosion(e.x, e.y, TIER_COLORS[e.tier]);
+          this.audio?.playEnemyKill();
+          this.events.push({ tick: s.tick, type: 'kill', tier: e.tier, wave: s.wave });
+          this.cbs.onScore(s.score);
+          this.cbs.onKill(e.tier, pts, this.scarcityMultiplier);
+          this.tryDropPowerup(e.x, e.y);
+        }
+      }
+    }
+
+    // Also hit boss
+    if (s.boss?.alive) {
+      const ex = s.boss.x - s.player.x;
+      const ey = s.boss.y - s.player.y;
+      const proj = ex * nx + ey * ny;
+      if (proj > 0) {
+        const perpX = ex - proj * nx;
+        const perpY = ey - proj * ny;
+        const dist = Math.sqrt(perpX * perpX + perpY * perpY);
+        if (dist < 40) {
+          s.boss.hp--;
+          s.boss.flashFrames = 4;
+          if (s.boss.hp <= 0) {
+            s.boss.alive = false;
+            this.bossHpPool.delete(s.boss.poolIndex);
+            const pts = Math.round(s.boss.cfg.points * this.scarcityMultiplier);
+            s.score += pts;
+            s.kills++;
+            s.burned += s.boss.cfg.burnUnits;
+            this.spawnExplosion(s.boss.x, s.boss.y, '#ff4500');
+            this.spawnExplosion(s.boss.x + 25, s.boss.y - 25, '#ffd700');
+            this.spawnExplosion(s.boss.x - 25, s.boss.y + 25, '#ff4500');
+            this.audio?.playBossKill();
+            this.events.push({ tick: s.tick, type: 'kill', tier: 5, wave: s.wave });
+            this.cbs.onScore(s.score);
+            this.cbs.onKill(5, pts, this.scarcityMultiplier);
+          }
+        }
+      }
+    }
+  }
+
   // ── Bullet movement ───────────────────────────────────────────────────────────
 
   private moveBullets(): void {
@@ -372,9 +478,9 @@ export class GameEngine {
   private moveMoon(): void {
     const s = this.state;
     if (!s.moon || !s.moon.alive) return;
-    s.moon.x += MOON_SPEED;
+    s.moon.x -= MOON_SPEED;
     if (s.moon.flashFrames > 0) s.moon.flashFrames--;
-    if (s.moon.x > CANVAS_W + MOON_RADIUS * 2) s.moon = null;
+    if (s.moon.x < -MOON_RADIUS * 2) s.moon = null;
   }
 
   // ── Boss movement (patrol + sine Y) ──────────────────────────────────────────
@@ -635,11 +741,12 @@ export class GameEngine {
   private tryDropPowerup(x: number, y: number): void {
     const s = this.state;
     const roll = Math.random();
-    const { weapon, shield } = POWERUP_CONFIGS;
+    const { weapon, laser, shield } = POWERUP_CONFIGS;
     let kind: PowerupEntity['kind'] | null = null;
 
-    if (roll < weapon.dropChance)                       kind = 'weapon';
-    else if (roll < weapon.dropChance + shield.dropChance) kind = 'shield';
+    if (roll < weapon.dropChance)                                          kind = 'weapon';
+    else if (roll < weapon.dropChance + laser.dropChance)                  kind = 'laser';
+    else if (roll < weapon.dropChance + laser.dropChance + shield.dropChance) kind = 'shield';
 
     if (kind) {
       s.powerups.push({ id: s.nextPowerupId++, x, y, kind, alive: true });
@@ -651,21 +758,25 @@ export class GameEngine {
     const cfg = POWERUP_CONFIGS[kind];
     if (kind === 'weapon') {
       s.weaponFrames = cfg.duration;
+    } else if (kind === 'laser') {
+      s.laserFrames = cfg.duration;
     } else {
-      s.shieldActive = true;
+      // Shield stacks up to maxStacks (default 2)
+      const max = cfg.maxStacks ?? 1;
+      s.shieldCount = Math.min(s.shieldCount + 1, max);
     }
-    this.cbs.onPowerup(kind, s.weaponFrames, s.shieldActive);
+    this.cbs.onPowerup(kind, s.weaponFrames, s.laserFrames, s.shieldCount);
   }
 
   private hitPlayer(): void {
     const s = this.state;
-    // Shield absorbs the first hit
-    if (s.shieldActive) {
-      s.shieldActive = false;
+    // Shield absorbs the hit (consume one stack)
+    if (s.shieldCount > 0) {
+      s.shieldCount--;
       s.player.invincibleFrames = PLAYER_INVINCIBLE;
       this.spawnExplosion(s.player.x, s.player.y, '#00d4ff'); // blue flash
       this.audio?.playShieldBlock();
-      this.cbs.onPowerup(null, s.weaponFrames, false);
+      this.cbs.onPowerup(null, s.weaponFrames, s.laserFrames, s.shieldCount);
       return;
     }
     s.player.lives--;
@@ -689,7 +800,7 @@ export class GameEngine {
 
     const allSpawned   = s.nextSpawns.length === 0;
     const noEnemies    = s.enemies.filter(e => e.alive).length === 0;
-    const moonResolved = s.moon === null || !s.moon.alive || s.moon.x > CANVAS_W;
+    const moonResolved = s.moon === null || !s.moon.alive || s.moon.x < 0;
     const bossResolved = !s.boss || !s.boss.alive;
 
     if (allSpawned && noEnemies && moonResolved && bossResolved) {
@@ -954,21 +1065,62 @@ export class GameEngine {
         // Glow ring
         ctx.beginPath();
         ctx.arc(pu.x, pu.y, 16, 0, Math.PI * 2);
-        ctx.strokeStyle = pu.kind === 'weapon' ? 'rgba(247,147,26,0.5)' : 'rgba(0,212,255,0.5)';
+        ctx.strokeStyle = pu.kind === 'weapon' ? 'rgba(247,147,26,0.5)'
+                       : pu.kind === 'laser'  ? 'rgba(255,50,50,0.5)'
+                       :                        'rgba(0,212,255,0.5)';
         ctx.lineWidth = 2;
         ctx.stroke();
         ctx.globalAlpha = 1;
       }
     }
 
-    // Shield ring around player when active
-    if (s.shieldActive) {
+    // Shield rings around player (1 ring per stack, max 2)
+    if (s.shieldCount >= 1) {
       const pulse = 0.5 + 0.5 * Math.sin(s.tick * 0.2);
       ctx.beginPath();
       ctx.arc(s.player.x, s.player.y, PLAYER_SIZE + 10, 0, Math.PI * 2);
       ctx.strokeStyle = `rgba(0,212,255,${pulse})`;
       ctx.lineWidth = 3;
       ctx.stroke();
+    }
+    if (s.shieldCount >= 2) {
+      const pulse = 0.5 + 0.5 * Math.sin(s.tick * 0.15 + 1);
+      ctx.beginPath();
+      ctx.arc(s.player.x, s.player.y, PLAYER_SIZE + 18, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(0,180,255,${pulse})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // Laser beam rendering
+    if (s.laserFrames > 0 && this.laserTarget) {
+      const pulse = 0.6 + 0.4 * Math.sin(s.tick * 0.3);
+      // Outer glow
+      ctx.save();
+      ctx.globalAlpha = pulse * 0.3;
+      ctx.beginPath();
+      ctx.moveTo(s.player.x, s.player.y);
+      ctx.lineTo(this.laserTarget.x, this.laserTarget.y);
+      ctx.strokeStyle = '#ff2222';
+      ctx.lineWidth = 8;
+      ctx.stroke();
+      // Core beam
+      ctx.globalAlpha = pulse;
+      ctx.beginPath();
+      ctx.moveTo(s.player.x, s.player.y);
+      ctx.lineTo(this.laserTarget.x, this.laserTarget.y);
+      ctx.strokeStyle = '#ff6644';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      // Inner bright line
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.moveTo(s.player.x, s.player.y);
+      ctx.lineTo(this.laserTarget.x, this.laserTarget.y);
+      ctx.strokeStyle = '#ffcc88';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
     }
 
     // Player ship
@@ -977,18 +1129,19 @@ export class GameEngine {
     if (!blink) {
       ctx.save();
       ctx.translate(p.x, p.y);
-      ctx.rotate(-Math.PI / 4);          // cancel the emoji's ~45° tilt → horizontal
+      ctx.rotate(-Math.PI / 4);            // cancel emoji tilt → horizontal
+      ctx.scale(-1, 1);                    // then mirror → faces LEFT
       ctx.font = '28px serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('🚀', 0, 0);
       ctx.restore();
-      const thrust = ctx.createRadialGradient(p.x - 16, p.y, 0, p.x - 16, p.y, 14);
+      const thrust = ctx.createRadialGradient(p.x + 16, p.y, 0, p.x + 16, p.y, 14);
       thrust.addColorStop(0, 'rgba(247,147,26,0.5)');
       thrust.addColorStop(1, 'transparent');
       ctx.fillStyle = thrust;
       ctx.beginPath();
-      ctx.ellipse(p.x - 16, p.y, 11, 7, 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x + 16, p.y, 11, 7, 0, 0, Math.PI * 2);
       ctx.fill();
     }
 
