@@ -15,7 +15,7 @@ export const BULLET_SPEED      = 10;     // px/frame
 // ── Planet / Moon ─────────────────────────────────────────────────────────────
 export const MOON_SPEED  = 1.2;   // px/frame (slow, player must protect it)
 export const MOON_Y_LANE = 0.35;  // fraction of canvas height
-export const MOON_RADIUS = 22;    // collision radius px
+export const MOON_RADIUS = 44;    // collision radius px (doubled)
 
 export interface PlanetConfig {
   readonly glyph:    string;

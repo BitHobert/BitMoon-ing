@@ -70,7 +70,7 @@ export function LobbyPage({ navigate }: Props) {
         flexWrap: 'wrap',
       }}>
         <div className="pixel glow-orange" style={{ fontSize: 14, letterSpacing: 2 }}>
-          ₿ITMOON
+          BITMOON'ING
         </div>
         <SupplyMeter />
         <WalletButton />
@@ -158,7 +158,7 @@ export function LobbyPage({ navigate }: Props) {
         display: 'flex',
         justifyContent: 'space-between',
       }}>
-        <span>BITMOON © 2026</span>
+        <span>BITMOON'ING © 2026</span>
         <span style={{ color: supply ? 'var(--color-green)' : 'var(--color-red)' }}>
           {supply ? '● LIVE' : '○ CONNECTING…'}
         </span>

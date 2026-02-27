@@ -24,7 +24,7 @@ export function GameHUD({ score, wave, lives, tournamentType }: Props) {
     }}>
       {/* Logo */}
       <div className="pixel glow-orange" style={{ fontSize: 12, letterSpacing: 2 }}>
-        ₿ITMOON
+        BITMOON'ING
       </div>
 
       {/* Stats */}

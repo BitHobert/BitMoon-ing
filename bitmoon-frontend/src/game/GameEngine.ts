@@ -975,16 +975,20 @@ export class GameEngine {
     const p = s.player;
     const blink = p.invincibleFrames > 0 && Math.floor(p.invincibleFrames / 6) % 2 === 0;
     if (!blink) {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(-Math.PI / 4);          // cancel the emoji's ~45° tilt → horizontal
       ctx.font = '28px serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('🚀', p.x, p.y);
-      const thrust = ctx.createRadialGradient(p.x, p.y + 16, 0, p.x, p.y + 16, 14);
+      ctx.fillText('🚀', 0, 0);
+      ctx.restore();
+      const thrust = ctx.createRadialGradient(p.x - 16, p.y, 0, p.x - 16, p.y, 14);
       thrust.addColorStop(0, 'rgba(247,147,26,0.5)');
       thrust.addColorStop(1, 'transparent');
       ctx.fillStyle = thrust;
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y + 16, 7, 11, 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x - 16, p.y, 11, 7, 0, 0, Math.PI * 2);
       ctx.fill();
     }
 
