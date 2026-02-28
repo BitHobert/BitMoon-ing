@@ -1,4 +1,5 @@
 import HyperExpress from '@btc-vision/hyper-express';
+import type uWS from '@btc-vision/uwebsockets.js';
 import { Config } from '../config/Config.js';
 import { AuthService } from '../services/AuthService.js';
 import { GameSessionService } from '../services/GameSessionService.js';
@@ -76,6 +77,11 @@ export class ApiServer {
         this.app.set_error_handler(this.onError.bind(this));
         this.setupMiddleware();
         this.setupRoutes();
+    }
+
+    /** Underlying uWS instance — used to attach WebSocket routes on the same port. */
+    public get uwsInstance(): uWS.TemplatedApp {
+        return this.app.uws_instance;
     }
 
     // ── Lifecycle ────────────────────────────────────────────────────────────

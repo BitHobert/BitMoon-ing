@@ -54,9 +54,14 @@ async function main(): Promise<void> {
     const api = new ApiServer();
     await api.start();
 
-    // 2. WebSocket
+    // 2. WebSocket — shares the HTTP port when WS_PORT === HTTP_PORT
+    //    (required for single-port hosts like Railway)
     const ws = WsServer.getInstance();
-    ws.start();
+    if (Config.WS_PORT === Config.HTTP_PORT) {
+        ws.start(api.uwsInstance);
+    } else {
+        ws.start();
+    }
 
     // 3. MongoDB + dependent services — attempted in background so HTTP stays live
     const leaderboard = LeaderboardService.getInstance();

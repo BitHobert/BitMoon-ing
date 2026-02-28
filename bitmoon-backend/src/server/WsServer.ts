@@ -52,8 +52,38 @@ export class WsServer {
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
-    public start(): void {
-        this.app = uWS.App().ws<ClientData>('/*', {
+    /**
+     * Start the WebSocket server.
+     *
+     * @param existingApp  If provided, WebSocket routes are added to this uWS
+     *                     app instead of creating a standalone listener. This
+     *                     allows HTTP + WS to share a single port (required for
+     *                     Railway / single-port deployments).
+     */
+    public start(existingApp?: uWS.TemplatedApp): void {
+        if (existingApp) {
+            // Attach WS route to the existing HTTP server (shared port)
+            this.app = existingApp;
+            this.attachWsRoute(this.app);
+            console.log(`[WsServer] Attached to HTTP server (shared port)`);
+        } else {
+            // Standalone WS server on its own port
+            this.app = uWS.App();
+            this.attachWsRoute(this.app);
+            this.app.listen(Config.WS_PORT, (token) => {
+                if (token) {
+                    console.log(`[WsServer] Listening on port ${Config.WS_PORT}`);
+                } else {
+                    console.error(`[WsServer] Failed to bind port ${Config.WS_PORT}`);
+                }
+            });
+        }
+
+        this.registerWatchers();
+    }
+
+    private attachWsRoute(app: uWS.TemplatedApp): void {
+        app.ws<ClientData>('/*', {
             /* Compression off for low latency */
             compression: 0,
             maxPayloadLength: 64 * 1024,    // 64 KB
@@ -81,16 +111,6 @@ export class WsServer {
                 this.clients.delete(ws as WsClient);
             },
         });
-
-        this.app.listen(Config.WS_PORT, (token) => {
-            if (token) {
-                console.log(`[WsServer] Listening on port ${Config.WS_PORT}`);
-            } else {
-                console.error(`[WsServer] Failed to bind port ${Config.WS_PORT}`);
-            }
-        });
-
-        this.registerWatchers();
     }
 
     // ── Internal message handling ────────────────────────────────────────────

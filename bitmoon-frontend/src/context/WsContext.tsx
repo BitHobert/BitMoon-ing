@@ -10,7 +10,9 @@ import { WsClient } from '../api/ws';
 import type { KillFeedEntry, SupplySnapshot } from '../types';
 
 const INITIAL_SUPPLY = 100_000_000_000_000_000n; // 10^17 raw units (1B tokens × 10^8)
-const WS_URL = import.meta.env.DEV ? 'ws://localhost:3001' : `wss://${window.location.host}/ws`;
+const WS_URL: string =
+  (import.meta.env['VITE_WS_URL'] as string | undefined) ??
+  (import.meta.env.DEV ? 'ws://localhost:3001' : `wss://${window.location.host}/ws`);
 
 interface WsContextValue {
   supply: SupplySnapshot | null;

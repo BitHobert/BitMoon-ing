@@ -39,11 +39,11 @@ export const Config = {
     /** MongoDB database name */
     MONGO_DB_NAME: process.env['MONGO_DB_NAME'] ?? 'bitmoon',
 
-    /** REST API port */
-    HTTP_PORT: parseInt(process.env['HTTP_PORT'] ?? '3000', 10),
+    /** REST API port (Railway sets PORT automatically) */
+    HTTP_PORT: parseInt(process.env['PORT'] ?? process.env['HTTP_PORT'] ?? '3000', 10),
 
-    /** WebSocket server port */
-    WS_PORT: parseInt(process.env['WS_PORT'] ?? '3001', 10),
+    /** WebSocket server port — defaults to HTTP_PORT for single-port hosts (Railway) */
+    WS_PORT: parseInt(process.env['WS_PORT'] ?? process.env['PORT'] ?? '3001', 10),
 
     /** JWT signing secret — change in production */
     JWT_SECRET: process.env['JWT_SECRET'] ?? 'change_me_in_production',
@@ -139,9 +139,9 @@ export const Config = {
     TOURNAMENT_GENESIS_BLOCK: BigInt(process.env['TOURNAMENT_GENESIS_BLOCK'] ?? '0'),
 
     /** Active blocks per daily tournament. */
-    DAILY_ACTIVE_BLOCKS:   140n,
+    DAILY_ACTIVE_BLOCKS:   100n,
     /** Active blocks per weekly tournament. */
-    WEEKLY_ACTIVE_BLOCKS:  980n,
+    WEEKLY_ACTIVE_BLOCKS:  200n,
     /** Active blocks per monthly tournament. */
     MONTHLY_ACTIVE_BLOCKS: 3920n,
 

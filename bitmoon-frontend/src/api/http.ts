@@ -14,7 +14,8 @@ import type {
   TournamentType,
 } from '../types';
 
-const BASE = '/api';
+const BASE: string =
+  (import.meta.env['VITE_API_BASE_URL'] as string | undefined) ?? '/api';
 
 class ApiError extends Error {
   constructor(
