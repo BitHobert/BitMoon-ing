@@ -113,7 +113,7 @@ export function TournamentLeaderboard({ prizePools }: Props) {
         <span>🥇 {fmtTokens(prizes[0])}</span>
         <span>🥈 {fmtTokens(prizes[1])}</span>
         <span>🥉 {fmtTokens(prizes[2])}</span>
-        <span style={{ marginLeft: 'auto', color }}>BITMOON</span>
+        <span style={{ marginLeft: 'auto', color }}>tBTC</span>
       </div>
 
       {/* Leaderboard table */}

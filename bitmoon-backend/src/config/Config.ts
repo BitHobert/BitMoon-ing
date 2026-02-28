@@ -55,8 +55,8 @@ export const Config = {
     ADMIN_SECRET: process.env['ADMIN_SECRET'] ?? 'change_me_admin_secret',
 
     /**
-     * $BITMOON total initial game supply.
-     * Stored in raw units (8 decimal places): 1 $BITMOON = 100_000_000 units.
+     * Total initial game supply (tBTC on testnet, wBTC on mainnet).
+     * Stored in raw units (8 decimal places): 1 token = 100_000_000 units.
      * Default: 1,000,000,000 tokens → 100_000_000_000_000_000 raw units.
      */
     INITIAL_SUPPLY: BigInt(process.env['INITIAL_SUPPLY'] ?? '1000000000') * 100_000_000n,

@@ -86,7 +86,7 @@ export function TournamentCard({ info, navigate, currentBlock, playerRank }: Pro
         <div className="pixel" style={{ fontSize: 15, color: 'var(--color-orange)' }}>
           {prizeDisplay}
         </div>
-        <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginTop: 2 }}>BITMOON</div>
+        <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginTop: 2 }}>tBTC</div>
       </div>
 
       {/* Stats row */}

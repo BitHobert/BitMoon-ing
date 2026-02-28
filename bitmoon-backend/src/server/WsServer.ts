@@ -24,7 +24,7 @@ interface ClientData {
  * Real-time WebSocket server using @btc-vision/uwebsocket.js.
  *
  * Channels:
- *  supply     — $BITMOON supply updates every poll interval
+ *  supply     — token supply updates every poll interval
  *  kill_feed  — individual kill events from active game sessions
  *  leaderboard — pushed whenever a new high score is saved
  */

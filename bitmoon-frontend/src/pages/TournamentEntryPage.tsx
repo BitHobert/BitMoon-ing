@@ -213,8 +213,8 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
 
         {/* Details grid */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 8px', marginBottom: 20 }}>
-          <Detail label="PRIZE POOL"  value={`${prizePool} BITMOON`}  color="var(--color-orange)" />
-          <Detail label="ENTRY FEE"   value={`${feeTokens} BITMOON`}  color={color} />
+          <Detail label="PRIZE POOL"  value={`${prizePool} tBTC`}  color="var(--color-orange)" />
+          <Detail label="ENTRY FEE"   value={`${feeTokens} tBTC`}  color={color} />
           <Detail label="PLAYERS"     value={String(tournament.entrantCount)} color="var(--color-text)" />
           <Detail label="YOUR WALLET" value={shortAddr(wallet.address ?? '')} color="var(--color-text-dim)" />
         </div>
@@ -227,7 +227,7 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
               borderRadius: 3, padding: '10px 14px', marginBottom: 18,
               fontFamily: 'var(--font-pixel)', fontSize: 8, color: 'var(--color-text-dim)', lineHeight: 2,
             }}>
-              Sending entry fee transfers <strong style={{ color: 'var(--color-orange)' }}>{feeTokens} BITMOON</strong> to the prize contract.
+              Sending entry fee transfers <strong style={{ color: 'var(--color-orange)' }}>{feeTokens} tBTC</strong> to the prize contract.
               Your score will be eligible for the {tournament.tournamentType} prize pool.
             </div>
 

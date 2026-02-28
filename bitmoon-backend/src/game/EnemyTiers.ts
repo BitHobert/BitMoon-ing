@@ -8,7 +8,7 @@ import type { EnemyTierConfig, TierNumber } from '../types/index.js';
  * deflationary supply mechanic: fewer tokens = higher scarcity multiplier.
  *
  * burnPerKill is in raw token units (8 decimal places):
- *   1 $BITMOON = 100_000_000n raw units
+ *   1 token = 100_000_000n raw units (tBTC on testnet, wBTC on mainnet)
  *
  * Tune these values once the final game design chart is confirmed.
  */
@@ -17,7 +17,7 @@ export const ENEMY_TIERS: Readonly<Record<TierNumber, EnemyTierConfig>> = {
         tier: 1,
         hp: 1,
         basePoints: 100,
-        burnPerKill: 100_000_000n,          // 1 $BITMOON
+        burnPerKill: 100_000_000n,          // 1 tokens
         firesBack: false,
         speedFactor: 1.0,
     },
@@ -25,7 +25,7 @@ export const ENEMY_TIERS: Readonly<Record<TierNumber, EnemyTierConfig>> = {
         tier: 2,
         hp: 2,
         basePoints: 300,
-        burnPerKill: 500_000_000n,          // 5 $BITMOON
+        burnPerKill: 500_000_000n,          // 5 tokens
         firesBack: false,
         speedFactor: 1.3,
     },
@@ -33,7 +33,7 @@ export const ENEMY_TIERS: Readonly<Record<TierNumber, EnemyTierConfig>> = {
         tier: 3,
         hp: 3,
         basePoints: 750,
-        burnPerKill: 1_000_000_000n,        // 10 $BITMOON
+        burnPerKill: 1_000_000_000n,        // 10 tokens
         firesBack: false,
         speedFactor: 1.6,
     },
@@ -41,7 +41,7 @@ export const ENEMY_TIERS: Readonly<Record<TierNumber, EnemyTierConfig>> = {
         tier: 4,
         hp: 5,
         basePoints: 1_500,
-        burnPerKill: 5_000_000_000n,        // 50 $BITMOON
+        burnPerKill: 5_000_000_000n,        // 50 tokens
         firesBack: true,
         speedFactor: 2.0,
     },
@@ -49,7 +49,7 @@ export const ENEMY_TIERS: Readonly<Record<TierNumber, EnemyTierConfig>> = {
         tier: 5,
         hp: 8,
         basePoints: 3_000,
-        burnPerKill: 10_000_000_000n,       // 100 $BITMOON
+        burnPerKill: 10_000_000_000n,       // 100 tokens
         firesBack: true,
         speedFactor: 2.5,
     },

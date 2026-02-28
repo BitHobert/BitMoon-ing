@@ -21,7 +21,7 @@ export class ScoreSimulator {
      * @param events     - Ordered game events from the client
      * @param clientScore - Score the client claims
      * @param clientBurned - Tokens burned the client claims
-     * @param initialSupply - $BITMOON supply at session start
+     * @param initialSupply - token supply at session start
      * @returns ScoreResult with validated figures
      */
     public static simulate(

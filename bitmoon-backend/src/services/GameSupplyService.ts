@@ -12,7 +12,7 @@ interface SupplyDoc {
 }
 
 /**
- * GameSupplyService manages the global in-game $BITMOON supply counter.
+ * GameSupplyService manages the global in-game token supply counter.
  *
  * The supply starts at INITIAL_SUPPLY and is atomically decremented each
  * time a game session ends with validated kills. As supply drops, the
