@@ -13,28 +13,50 @@ export const PLAYER_SHOOT_RATE = 12;     // frames between auto-shots
 export const BULLET_SPEED      = 10;     // px/frame
 
 // ── Planet / Moon ─────────────────────────────────────────────────────────────
-export const MOON_SPEED  = 0.6;   // px/frame (slow drift left→right, player protects it)
-export const MOON_Y_LANE = 0.35;  // fraction of canvas height
+export const MOON_SPEED  = 0.4;   // px/frame (slow drift left→right)
+export const MOON_Y_LANE = 0.40;  // fraction of canvas height
 export const MOON_RADIUS = 56;    // collision / visual radius px
 
 export interface PlanetConfig {
   readonly glyph:    string;
   readonly penalty:  number;   // points lost if enemy destroys it
+  readonly hp:       number;   // hits to destroy (very tanky)
   readonly label:    string;   // shown in HUD hint
   readonly spriteId?: string;  // path under /public — if set, use PNG sprite
 }
 
-export const PLANET_POOL: PlanetConfig[] = [
-  { glyph: '🌕', penalty:  7_000, label: 'MOON',      spriteId: 'sprites/planet-moon.png'     },
-  { glyph: '🌍', penalty: 10_000, label: 'NEBULA',    spriteId: 'sprites/planet-nebula.png'   },
-  { glyph: '🌎', penalty: 15_000, label: 'INFERNO',   spriteId: 'sprites/planet-inferno.png'  },
-  { glyph: '🌏', penalty: 20_000, label: 'EARTH',     spriteId: 'sprites/planet-earth.png'    },
-  { glyph: '🪐', penalty: 25_000, label: 'SATURN',    spriteId: 'sprites/planet-saturn.png'   },
-  { glyph: '🌑', penalty: 40_000, label: 'DARK MOON', spriteId: 'sprites/planet-darkmoon.png' },
-];
+export const PLANETS: Record<string, PlanetConfig> = {
+  moon:     { glyph: '🌕', penalty:  7_000, hp:  5, label: 'MOON',      spriteId: 'sprites/planet-moon.png'     },
+  nebula:   { glyph: '🌍', penalty: 10_000, hp:  5, label: 'NEBULA',    spriteId: 'sprites/planet-nebula.png'   },
+  inferno:  { glyph: '🌎', penalty: 15_000, hp:  8, label: 'INFERNO',   spriteId: 'sprites/planet-inferno.png'  },
+  earth:    { glyph: '🌏', penalty: 20_000, hp:  8, label: 'EARTH',     spriteId: 'sprites/planet-earth.png'    },
+  saturn:   { glyph: '🪐', penalty: 25_000, hp: 10, label: 'SATURN',    spriteId: 'sprites/planet-saturn.png'   },
+  darkmoon: { glyph: '🌑', penalty: 40_000, hp: 13, label: 'DARK MOON', spriteId: 'sprites/planet-darkmoon.png' },
+};
 
-export function randomPlanet(): PlanetConfig {
-  return PLANET_POOL[Math.floor(Math.random() * PLANET_POOL.length)];
+/**
+ * Wave-based planet schedule.
+ * Returns null for waves with no planet (waves 1-2, 4, 7-8, boss waves, etc.)
+ */
+export function getPlanetForWave(waveNum: number): PlanetConfig | null {
+  if (isBossWave(waveNum)) return null;
+
+  // Fixed assignments
+  if (waveNum === 3 || waveNum === 6)   return PLANETS.moon;
+  if (waveNum === 9)                    return PLANETS.nebula;
+  if (waveNum === 12 || waveNum === 14) return PLANETS.inferno;
+  if (waveNum === 17 || waveNum === 19) return PLANETS.earth;
+
+  // Wave 21+: Saturn and Dark Moon alternate (skip boss waves)
+  if (waveNum >= 21) {
+    let count = 0;
+    for (let w = 21; w <= waveNum; w++) {
+      if (!isBossWave(w)) count++;
+    }
+    return count % 2 === 1 ? PLANETS.saturn : PLANETS.darkmoon;
+  }
+
+  return null;
 }
 
 // ── Enemy tiers ───────────────────────────────────────────────────────────────

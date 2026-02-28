@@ -4,8 +4,8 @@ import {
   PLAYER_SPEED, PLAYER_LIVES, PLAYER_INVINCIBLE, PLAYER_SIZE, PLAYER_SHOOT_RATE, BULLET_SPEED,
   MOON_SPEED, MOON_Y_LANE, MOON_RADIUS,
   TIER_CONFIGS, BASE_ENEMY_SPEED,
-  buildWave, isBossWave, getBossConfig, getBossIndex, randomPlanet,
-  POWERUP_CONFIGS, BOSS_POOL, PLANET_POOL,
+  buildWave, isBossWave, getBossConfig, getBossIndex, getPlanetForWave,
+  POWERUP_CONFIGS, BOSS_POOL, PLANETS,
 } from './constants';
 import type { PlanetConfig } from './constants';
 import type { GameState, GameCallbacks, EnemyEntity, ParticleEntity, PowerupEntity } from './types';
@@ -64,7 +64,7 @@ export class GameEngine {
     const paths = new Set<string>();
     for (const cfg of Object.values(TIER_CONFIGS)) if (cfg.sprite)   paths.add(cfg.sprite);
     for (const cfg of BOSS_POOL)                   if (cfg.sprite)   paths.add(cfg.sprite);
-    for (const cfg of PLANET_POOL)                 if (cfg.spriteId) paths.add(cfg.spriteId);
+    for (const cfg of Object.values(PLANETS))      if (cfg.spriteId) paths.add(cfg.spriteId);
     for (const p of paths) {
       const img = new Image();
       img.src = '/' + p;
@@ -167,10 +167,11 @@ export class GameEngine {
       };
       this.audio?.playBossSpawn();
     } else {
-      // Regular wave: random planet to protect
-      const planet    = randomPlanet();
+      // Regular wave: check if this wave has a planet to protect
+      const planet    = getPlanetForWave(waveNum);
       s.currentPlanet = planet;
       s.nextSpawns    = buildWave(waveNum);
+      if (!planet) s.moonSpawned = true; // no planet this wave — block spawn
       this.cbs.onPlanet(planet);
     }
 
@@ -233,18 +234,19 @@ export class GameEngine {
     const s = this.state;
     const elapsedTicks = s.tick - s.spawnTick;
 
-    // Planet: spawn once when first enemy would appear + 30 frames
-    if (!s.moonSpawned && s.nextSpawns.length > 0 && elapsedTicks >= s.nextSpawns[0].delayFrames + 30) {
+    // Planet: spawn once at wave start (30-frame grace period)
+    if (!s.moonSpawned && s.currentPlanet && elapsedTicks >= 30) {
       const planet = s.currentPlanet;
       s.moon = {
-        x:           -MOON_RADIUS * 2,
+        x:           CANVAS_W * 0.38,
         y:           CANVAS_H * MOON_Y_LANE,
         alive:       true,
+        hp:          planet.hp,
+        maxHp:       planet.hp,
         flashFrames: 0,
-        glyph:       planet?.glyph    ?? '🌕',
-        penalty:     planet?.penalty  ?? 10_000,
-        spriteId:    planet?.spriteId,
-        moonShield:  true,
+        glyph:       planet.glyph,
+        penalty:     planet.penalty,
+        spriteId:    planet.spriteId,
       };
       s.moonSpawned = true;
     }
@@ -684,26 +686,20 @@ export class GameEngine {
         if (!e.alive) continue;
         const dx = e.x - s.moon.x;
         const dy = e.y - s.moon.y;
-        if (Math.sqrt(dx * dx + dy * dy) < MOON_RADIUS + 16) {
-          if (s.moon.moonShield) {
-            // Shield absorbs the hit — break it with a burst of cyan explosions
-            s.moon.moonShield  = false;
-            s.moon.flashFrames = 80;
-            for (let i = 0; i < 8; i++) {
-              const a = (i / 8) * Math.PI * 2;
-              this.spawnExplosion(
-                s.moon.x + Math.cos(a) * (MOON_RADIUS + 10),
-                s.moon.y + Math.sin(a) * (MOON_RADIUS + 10),
-                '#00d4ff',
-              );
-            }
-            this.audio?.playPlanetShieldHit();
-          } else {
-            // No shield — normal destruction
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < MOON_RADIUS + 16) {
+          // Enemy hits the planet — reduce HP
+          s.moon.hp--;
+          s.moon.flashFrames = 30;
+          this.spawnExplosion(e.x, e.y, '#ffd700');
+          this.audio?.playPlanetShieldHit();
+
+          if (s.moon.hp <= 0) {
+            // Planet destroyed
             s.moon.alive = false;
             s.score = Math.max(0, s.score - s.moon.penalty);
             this.spawnExplosion(s.moon.x, s.moon.y, '#ffd700');
-            this.spawnExplosion(s.moon.x, s.moon.y, '#ffd700');
+            this.spawnExplosion(s.moon.x, s.moon.y, '#ff4500');
             this.audio?.playPlanetDestroyed();
             this.events.push({ tick: s.tick, type: 'miss', wave: s.wave });
             this.cbs.onScore(s.score);
@@ -712,7 +708,7 @@ export class GameEngine {
           break;
         }
         // Flash planet when enemies are nearby
-        if (Math.sqrt(dx * dx + dy * dy) < MOON_RADIUS + 60) {
+        if (dist < MOON_RADIUS + 60) {
           s.moon.flashFrames = 6;
         }
       }
@@ -878,52 +874,28 @@ export class GameEngine {
         ctx.stroke();
       }
 
-      // ── Planet shield force field ──────────────────────────────────────────────
-      if (m.moonShield) {
-        const pulse  = 0.55 + 0.45 * Math.sin(s.tick * 0.18);
-        const pulse2 = 0.55 + 0.45 * Math.sin(s.tick * 0.18 + Math.PI);
+      // ── Planet HP bar ──────────────────────────────────────────────────────────
+      if (m.hp < m.maxHp) {
+        const barW = MOON_RADIUS * 1.6;
+        const barH = 6;
+        const barX = m.x - barW / 2;
+        const barY = m.y + MOON_RADIUS + 10;
+        const hpFrac = m.hp / m.maxHp;
 
-        ctx.save();
+        // Background
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
 
-        // Outer thick glow ring
-        ctx.shadowColor = '#00d4ff';
-        ctx.shadowBlur  = 22;
-        ctx.strokeStyle = `rgba(0, 212, 255, ${pulse})`;
-        ctx.lineWidth   = 5;
-        ctx.beginPath();
-        ctx.arc(m.x, m.y, MOON_RADIUS + 14, 0, Math.PI * 2);
-        ctx.stroke();
+        // HP fill — green→yellow→red
+        const r = hpFrac > 0.5 ? Math.floor(255 * (1 - hpFrac) * 2) : 255;
+        const g = hpFrac > 0.5 ? 255 : Math.floor(255 * hpFrac * 2);
+        ctx.fillStyle = `rgb(${r},${g},0)`;
+        ctx.fillRect(barX, barY, barW * hpFrac, barH);
 
-        // Inner secondary ring (offset pulse)
-        ctx.shadowBlur  = 10;
-        ctx.strokeStyle = `rgba(120, 240, 255, ${pulse2 * 0.7})`;
-        ctx.lineWidth   = 2.5;
-        ctx.beginPath();
-        ctx.arc(m.x, m.y, MOON_RADIUS + 8, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Rotating 6-segment arc (force-field panels)
-        ctx.save();
-        ctx.translate(m.x, m.y);
-        ctx.rotate(s.tick * 0.022);
-        ctx.shadowColor = '#00ffff';
-        ctx.shadowBlur  = 12;
-        ctx.strokeStyle = `rgba(0, 255, 255, ${0.35 + 0.3 * Math.sin(s.tick * 0.12)})`;
-        ctx.lineWidth   = 3.5;
-        ctx.lineCap     = 'round';
-        const segR  = MOON_RADIUS + 20;
-        const nSegs = 6;
-        const gap   = 0.32;
-        for (let i = 0; i < nSegs; i++) {
-          const start = (i / nSegs) * Math.PI * 2 + gap / 2;
-          const end   = ((i + 1) / nSegs) * Math.PI * 2 - gap / 2;
-          ctx.beginPath();
-          ctx.arc(0, 0, segR, start, end);
-          ctx.stroke();
-        }
-        ctx.restore();
-
-        ctx.restore();
+        // Border
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barX - 1, barY - 1, barW + 2, barH + 2);
       }
     }
 

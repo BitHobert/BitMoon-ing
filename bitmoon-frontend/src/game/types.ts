@@ -30,11 +30,12 @@ export interface MoonEntity {
   x: number;
   y: number;
   alive: boolean;
+  hp: number;                // hits remaining (very tanky)
+  maxHp: number;             // starting HP for health bar
   flashFrames: number;       // flashing when near an enemy
   glyph: string;             // which planet emoji (🌕 🌍 🌎 🌏 🪐 🌑)
   penalty: number;           // points lost if destroyed
   spriteId?: string;         // if set, use custom canvas draw instead of emoji
-  moonShield: boolean;       // true = shield active, absorbs next enemy hit
 }
 
 export interface BossEntity {
