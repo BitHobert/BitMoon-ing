@@ -16,7 +16,9 @@ const OPNET_RPC: string =
 function rpcNetwork() {
   if (OPNET_RPC.includes('mainnet')) return networks.bitcoin;
   if (OPNET_RPC.includes('regtest')) return networks.regtest;
-  return networks.testnet;
+  // OPNet testnet is a Signet fork — MUST use opnetTestnet (bech32: "opt"),
+  // NOT networks.testnet (Bitcoin testnet4, bech32: "tb").
+  return networks.opnetTestnet;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

@@ -10,15 +10,15 @@
         "deploy": "tsx --tsconfig tsconfig.scripts.json scripts/deploy.ts"
     },
     "dependencies": {
-        "@btc-vision/as-bignum": "^0.0.5",
+        "@btc-vision/as-bignum": "^0.1.2",
         "@btc-vision/bitcoin": "^7.0.0-rc.6",
-        "@btc-vision/btc-runtime": "^1.9.10",
-        "@btc-vision/opnet-transform": "^0.1.12",
+        "@btc-vision/btc-runtime": "^1.11.0-rc.9",
+        "@btc-vision/opnet-transform": "^1.2.0",
         "@btc-vision/transaction": "^1.8.0-rc.10",
         "opnet": "^1.8.1-rc.17"
     },
     "devDependencies": {
-        "assemblyscript": "^0.28.4",
+        "@btc-vision/assemblyscript": "^0.29.2",
         "tsx": "^4.21.0",
         "typescript": "^5.9.2"
     }

@@ -36,17 +36,34 @@ export type SponsorBonusDepositedEventData = {
     readonly slotIndex: number;
 };
 
-// ── Call result types (void methods return empty properties object) ───────────
+// ── Call result types ────────────────────────────────────────────────────────
 
-export type RecordEntryResult     = CallResult<Record<string, never>, OPNetEvent<EntryRecordedEventData>[]>;
-export type DistributePrizeResult = CallResult<Record<string, never>, OPNetEvent<PrizeDistributedEventData>[]>;
-export type SetOperatorResult     = CallResult<Record<string, never>, OPNetEvent<never>[]>;
-export type SetDevWalletResult    = CallResult<Record<string, never>, OPNetEvent<never>[]>;
-export type DepositBonusResult    = CallResult<Record<string, never>, OPNetEvent<SponsorBonusDepositedEventData>[]>;
+/** Write methods return { success: boolean } */
+type BoolResult = { readonly success: boolean };
+
+export type RecordEntryResult     = CallResult<BoolResult, OPNetEvent<EntryRecordedEventData>[]>;
+export type DistributePrizeResult = CallResult<BoolResult, OPNetEvent<PrizeDistributedEventData>[]>;
+export type SetOperatorResult     = CallResult<BoolResult, OPNetEvent<never>[]>;
+export type SetDevWalletResult    = CallResult<BoolResult, OPNetEvent<never>[]>;
+export type DepositBonusResult    = CallResult<BoolResult, OPNetEvent<SponsorBonusDepositedEventData>[]>;
+
+/** View method result types */
+export type GetPoolInfoResult = CallResult<{
+    readonly mainPool: bigint;
+    readonly stagingCarry: bigint;
+    readonly activeCarry: bigint;
+    readonly lastDistKey: bigint;
+}, never[]>;
+
+export type GetOperatorResult     = CallResult<{ readonly operator: Address }, never[]>;
+export type GetTokenAddressResult = CallResult<{ readonly token: Address }, never[]>;
+export type GetSponsorCountResult = CallResult<{ readonly count: bigint }, never[]>;
 
 // ── Typed contract interface ──────────────────────────────────────────────────
 
 export interface IPrizeDistributorContract extends IOP_NETContract {
+    // ── Write methods (operator only) ────────────────────────────────────────
+
     /**
      * Record a verified tournament entry (operator only).
      * Call AFTER confirming the on-chain OP-20 transfer to the contract address.
@@ -91,44 +108,59 @@ export interface IPrizeDistributorContract extends IOP_NETContract {
         tokenAddress: Address,
         amount: bigint,
     ): Promise<DepositBonusResult>;
+
+    // ── View methods (read-only, no access control) ──────────────────────────
+
+    /** Returns pool info for a tournament type. */
+    getPoolInfo(tournamentType: number): Promise<GetPoolInfoResult>;
+
+    /** Returns the current operator address. */
+    getOperator(): Promise<GetOperatorResult>;
+
+    /** Returns the entry fee token contract address. */
+    getTokenAddress(): Promise<GetTokenAddressResult>;
+
+    /** Returns the number of sponsor bonus slots for a period. */
+    getSponsorCount(tournamentType: number, periodKey: bigint): Promise<GetSponsorCountResult>;
 }
 
 // ── ABI definition ────────────────────────────────────────────────────────────
 
 export const PRIZE_DISTRIBUTOR_ABI: BitcoinInterfaceAbi = [
+    // ── Write methods ────────────────────────────────────────────────────────
     {
         name: 'recordEntry',
         type: BitcoinAbiTypes.Function,
         inputs: [
-            { name: 'tournamentType', type: ABIDataTypes.UINT8    },
-            { name: 'periodKey',      type: ABIDataTypes.UINT256   },
-            { name: 'amount',         type: ABIDataTypes.UINT256   },
+            { name: 'tournamentType', type: ABIDataTypes.UINT8   },
+            { name: 'periodKey',      type: ABIDataTypes.UINT256 },
+            { name: 'amount',         type: ABIDataTypes.UINT256 },
         ],
-        outputs: [],
+        outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],
     },
     {
         name: 'distributePrize',
         type: BitcoinAbiTypes.Function,
         inputs: [
-            { name: 'tournamentType', type: ABIDataTypes.UINT8    },
-            { name: 'periodKey',      type: ABIDataTypes.UINT256   },
-            { name: 'winner1',        type: ABIDataTypes.ADDRESS   },
-            { name: 'winner2',        type: ABIDataTypes.ADDRESS   },
-            { name: 'winner3',        type: ABIDataTypes.ADDRESS   },
+            { name: 'tournamentType', type: ABIDataTypes.UINT8   },
+            { name: 'periodKey',      type: ABIDataTypes.UINT256 },
+            { name: 'winner1',        type: ABIDataTypes.ADDRESS },
+            { name: 'winner2',        type: ABIDataTypes.ADDRESS },
+            { name: 'winner3',        type: ABIDataTypes.ADDRESS },
         ],
-        outputs: [],
+        outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],
     },
     {
         name: 'setOperator',
         type: BitcoinAbiTypes.Function,
         inputs: [{ name: 'newOperator', type: ABIDataTypes.ADDRESS }],
-        outputs: [],
+        outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],
     },
     {
         name: 'setDevWallet',
         type: BitcoinAbiTypes.Function,
         inputs: [{ name: 'newDevWallet', type: ABIDataTypes.ADDRESS }],
-        outputs: [],
+        outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],
     },
     {
         name: 'depositBonus',
@@ -139,6 +171,40 @@ export const PRIZE_DISTRIBUTOR_ABI: BitcoinInterfaceAbi = [
             { name: 'tokenAddress',   type: ABIDataTypes.ADDRESS },
             { name: 'amount',         type: ABIDataTypes.UINT256 },
         ],
-        outputs: [],
+        outputs: [{ name: 'success', type: ABIDataTypes.BOOL }],
+    },
+
+    // ── View methods ─────────────────────────────────────────────────────────
+    {
+        name: 'getPoolInfo',
+        type: BitcoinAbiTypes.Function,
+        inputs: [{ name: 'tournamentType', type: ABIDataTypes.UINT8 }],
+        outputs: [
+            { name: 'mainPool',     type: ABIDataTypes.UINT256 },
+            { name: 'stagingCarry', type: ABIDataTypes.UINT256 },
+            { name: 'activeCarry',  type: ABIDataTypes.UINT256 },
+            { name: 'lastDistKey',  type: ABIDataTypes.UINT256 },
+        ],
+    },
+    {
+        name: 'getOperator',
+        type: BitcoinAbiTypes.Function,
+        inputs: [],
+        outputs: [{ name: 'operator', type: ABIDataTypes.ADDRESS }],
+    },
+    {
+        name: 'getTokenAddress',
+        type: BitcoinAbiTypes.Function,
+        inputs: [],
+        outputs: [{ name: 'token', type: ABIDataTypes.ADDRESS }],
+    },
+    {
+        name: 'getSponsorCount',
+        type: BitcoinAbiTypes.Function,
+        inputs: [
+            { name: 'tournamentType', type: ABIDataTypes.UINT8   },
+            { name: 'periodKey',      type: ABIDataTypes.UINT256 },
+        ],
+        outputs: [{ name: 'count', type: ABIDataTypes.UINT256 }],
     },
 ];

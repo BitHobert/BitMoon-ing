@@ -59,7 +59,9 @@ export class PrizeDistributorService {
 
         if (Config.OPERATOR_PRIVATE_KEY) {
             this.wallet = new Wallet(Config.OPERATOR_PRIVATE_KEY, Config.OPERATOR_MLDSA_KEY, Config.NETWORK);
-            this.operatorAddress = Address.fromString(this.wallet.p2tr);
+            // wallet.address is already an Address object (MLDSA public key hash);
+            // Address.fromString() rejects bech32 addresses, so never pass wallet.p2tr.
+            this.operatorAddress = this.wallet.address;
         }
 
         console.log('[PrizeDistributorService] Connected');
@@ -158,7 +160,11 @@ export class PrizeDistributorService {
 
         const typeIndex       = this.typeIndex(tournamentType);
         const periodKeyBigInt = BigInt(periodKey);
-        const tokenAddr       = Address.fromString(tokenAddress);
+        // tokenAddress may be bech32 (opt1s...) or hex (0x...); resolve accordingly.
+        // Token addresses are P2OP contracts, so isContract=true.
+        const tokenAddr       = tokenAddress.startsWith('0x')
+            ? Address.fromString(tokenAddress)
+            : await this.resolveAddress(tokenAddress, true);
 
         const contract = this.getContract();
         const call = await contract.depositBonus(typeIndex, periodKeyBigInt, tokenAddr, amount);
@@ -257,9 +263,11 @@ export class PrizeDistributorService {
         const top3 = await LeaderboardService.getInstance().getTop3ForTournament(type, periodKey);
         const zero  = Address.dead();
 
-        const w1: Address = top3[0] ? Address.fromString(top3[0].playerAddress) : zero;
-        const w2: Address = top3[1] ? Address.fromString(top3[1].playerAddress) : zero;
-        const w3: Address = top3[2] ? Address.fromString(top3[2].playerAddress) : zero;
+        // Player addresses in MongoDB are bech32 (opt1p...) — resolve to MLDSA key hashes.
+        // Address.fromString() rejects bech32; getPublicKeyInfo() performs the lookup.
+        const w1: Address = top3[0] ? await this.resolveAddress(top3[0].playerAddress) : zero;
+        const w2: Address = top3[1] ? await this.resolveAddress(top3[1].playerAddress) : zero;
+        const w3: Address = top3[2] ? await this.resolveAddress(top3[2].playerAddress) : zero;
 
         let txid = '';
         if (this.isContractReady()) {
@@ -416,6 +424,19 @@ export class PrizeDistributorService {
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
+    /**
+     * Resolve a bech32 address to an Address object (MLDSA public key hash).
+     * Address.fromString() only accepts hex public keys, so we must look up the
+     * key hash on-chain via getPublicKeyInfo().
+     *
+     * @param bech32Address  An opt1p... (wallet) or opt1s... (contract) address
+     * @param isContract     True for P2OP contract addresses (opt1s...), false for wallets
+     */
+    private async resolveAddress(bech32Address: string, isContract = false): Promise<Address> {
+        const provider = OPNetService.getInstance().getProvider();
+        return provider.getPublicKeyInfo(bech32Address, isContract);
+    }
+
     private isContractReady(): boolean {
         return !!(Config.PRIZE_CONTRACT_ADDRESS && Config.OPERATOR_PRIVATE_KEY && this.wallet);
     }
@@ -434,7 +455,7 @@ export class PrizeDistributorService {
     private txParams(): TransactionParameters {
         return {
             signer:                   this.wallet.keypair,
-            mldsaSigner:              null,
+            mldsaSigner:              this.wallet.mldsaKeypair ?? null,
             refundTo:                 Config.OPERATOR_P2TR_ADDRESS || this.wallet.p2tr,
             maximumAllowedSatToSpend: 10_000n,
             feeRate:                  10,

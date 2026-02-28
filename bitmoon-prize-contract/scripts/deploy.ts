@@ -62,16 +62,26 @@ const factory  = new TransactionFactory();
 // ── Constructor calldata ──────────────────────────────────────────────────────
 //
 // PrizeDistributor.onDeployment reads:
-//   calldata.readAddress()  → tokenAddress (32 bytes, MLDSA key hash)
-//   calldata.readAddress()  → devWallet    (32 bytes, MLDSA key hash)
+//   calldata.readAddress()  → tokenAddress (Address — MLDSA key hash)
+//   calldata.readAddress()  → devWallet    (Address — MLDSA key hash)
+//
+// Address.fromString() requires hex public keys — bech32 addresses must be
+// resolved via getPublicKeyInfo().
+
+console.log('\nResolving calldata addresses...');
+const tokenAddr = await provider.getPublicKeyInfo(tbtcAddress.trim(), true);
+// For the dev wallet, use wallet.address directly (same as getPublicKeyInfo would return)
+const devAddr   = devWallet.trim() === wallet.p2tr
+    ? wallet.address
+    : await provider.getPublicKeyInfo(devWallet.trim(), false);
 
 const writer = new BinaryWriter();
-writer.writeAddress(Address.fromString(tbtcAddress.trim()));
-writer.writeAddress(Address.fromString(devWallet.trim()));
+writer.writeAddress(tokenAddr);
+writer.writeAddress(devAddr);
 const calldata = writer.getBuffer();
-console.log(`Token address : ${tbtcAddress}`);
-console.log(`Dev wallet    : ${devWallet}`);
-console.log(`Calldata size : ${calldata.length} bytes (expected 64)`);
+console.log(`Token address : ${tbtcAddress} → ${tokenAddr.toHex()}`);
+console.log(`Dev wallet    : ${devWallet} → ${devAddr.toHex()}`);
+console.log(`Calldata size : ${calldata.length} bytes`);
 
 // ── Load WASM ─────────────────────────────────────────────────────────────────
 
