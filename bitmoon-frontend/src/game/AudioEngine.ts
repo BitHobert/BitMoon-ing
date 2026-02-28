@@ -3,6 +3,10 @@
 export class AudioEngine {
   private ctx:         AudioContext | null = null;
   private _masterGain: GainNode    | null = null;
+  private _sfxGain:    GainNode    | null = null;
+  private _bgmGain:    GainNode    | null = null;
+  private bgm:         HTMLAudioElement | null = null;
+  private bgmSource:   MediaElementAudioSourceNode | null = null;
   private muted = false;
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -12,19 +16,45 @@ export class AudioEngine {
     if (!this.ctx) {
       this.ctx         = new AudioContext();
       this._masterGain = this.ctx.createGain();
-      this._masterGain.gain.value = 0.35;
+      this._masterGain.gain.value = 1.0;
       this._masterGain.connect(this.ctx.destination);
+
+      // SFX bus (sound effects at 35% volume)
+      this._sfxGain = this.ctx.createGain();
+      this._sfxGain.gain.value = 0.35;
+      this._sfxGain.connect(this._masterGain);
+
+      // BGM bus (background music at 20% volume — sits behind SFX)
+      this._bgmGain = this.ctx.createGain();
+      this._bgmGain.gain.value = 0.20;
+      this._bgmGain.connect(this._masterGain);
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume();
+    this.startBGM();
   }
 
   public setMuted(muted: boolean): void {
     this.muted = muted;
     if (this._masterGain && this.ctx)
-      this._masterGain.gain.setTargetAtTime(muted ? 0 : 0.35, this.ctx.currentTime, 0.02);
+      this._masterGain.gain.setTargetAtTime(muted ? 0 : 1.0, this.ctx.currentTime, 0.02);
   }
 
   public isMuted(): boolean { return this.muted; }
+
+  // ── Background music ────────────────────────────────────────────────────────
+
+  private startBGM(): void {
+    if (this.bgm || !this.ctx || !this._bgmGain) return;
+    this.bgm      = new Audio('/audio/bgm-main.mp3');
+    this.bgm.loop = true;
+    this.bgmSource = this.ctx.createMediaElementSource(this.bgm);
+    this.bgmSource.connect(this._bgmGain);
+    this.bgm.play().catch(() => { /* browser may block — will retry on next resume */ });
+  }
+
+  public stopBGM(): void {
+    if (this.bgm) { this.bgm.pause(); this.bgm.currentTime = 0; }
+  }
 
   // ── Sound methods ──────────────────────────────────────────────────────────
 
@@ -173,7 +203,7 @@ export class AudioEngine {
     g.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
 
     osc.connect(g);
-    g.connect(this._masterGain!);
+    g.connect(this._sfxGain!);
     osc.start(startTime);
     osc.stop(startTime + duration + 0.01);
   }
@@ -203,7 +233,7 @@ export class AudioEngine {
 
     src.connect(flt);
     flt.connect(g);
-    g.connect(this._masterGain!);
+    g.connect(this._sfxGain!);
     src.start(startTime);
     src.stop(startTime + duration + 0.01);
   }
