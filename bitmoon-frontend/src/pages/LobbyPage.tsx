@@ -159,9 +159,18 @@ export function LobbyPage({ navigate }: Props) {
         justifyContent: 'space-between',
       }}>
         <span>BITMOON'ING © 2026</span>
-        <span style={{ color: supply ? 'var(--color-green)' : 'var(--color-red)' }}>
-          {supply ? '● LIVE' : '○ CONNECTING…'}
-        </span>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+          <span
+            style={{ cursor: 'pointer', opacity: 0.4 }}
+            onClick={() => navigate('admin')}
+            title="Admin Panel"
+          >
+            ADMIN
+          </span>
+          <span style={{ color: supply ? 'var(--color-green)' : 'var(--color-red)' }}>
+            {supply ? '● LIVE' : '○ CONNECTING…'}
+          </span>
+        </div>
       </footer>
     </div>
   );

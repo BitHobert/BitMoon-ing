@@ -230,6 +230,8 @@ export interface TournamentInfo {
     readonly nextStartBlock: string;
     /** Whether the current block is within this period's active range */
     readonly isActive: boolean;
+    /** Sponsor bonuses deposited for this tournament period (if any) */
+    readonly sponsorBonuses?: ReadonlyArray<{ readonly tokenAddress: string; readonly amount: string }>;
 }
 
 export interface PrizeDistribution {

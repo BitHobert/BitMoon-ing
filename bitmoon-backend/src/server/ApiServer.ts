@@ -322,7 +322,28 @@ export class ApiServer {
 
     private async handleGetTournaments(res: Res): Promise<void> {
         const tournaments = await this.tournament.getActiveTournaments();
-        res.json({ tournaments });
+
+        // Attach sponsor bonuses for each tournament period (non-blocking — failures return empty array)
+        const prizeService = PrizeDistributorService.getInstance();
+        const enriched = await Promise.all(
+            tournaments.map(async (t) => {
+                try {
+                    const bonuses = await prizeService.getBonusesForPeriod(t.tournamentType, t.tournamentKey);
+                    if (bonuses.length === 0) return t;
+                    return {
+                        ...t,
+                        sponsorBonuses: bonuses.map(b => ({
+                            tokenAddress: b.tokenAddress,
+                            amount: b.amount,
+                        })),
+                    };
+                } catch {
+                    return t;
+                }
+            }),
+        );
+
+        res.json({ tournaments: enriched });
     }
 
     private async handleTournamentLeaderboard(req: Req, res: Res): Promise<void> {

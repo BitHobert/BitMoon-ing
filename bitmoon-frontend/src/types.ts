@@ -41,6 +41,7 @@ export interface TournamentInfo {
   readonly prizeBlock: string;
   readonly nextStartBlock: string;
   readonly isActive: boolean;
+  readonly sponsorBonuses?: ReadonlyArray<{ readonly tokenAddress: string; readonly amount: string }>;
 }
 
 export interface PrizeDistribution {
@@ -142,4 +143,24 @@ export interface TournamentEnterResponse {
   readonly confirmations: number;
   readonly isVerified: boolean;
   readonly message: string;
+}
+
+// ─── Sponsor Bonus ──────────────────────────────────────────────────────────
+
+export interface SponsorBonusRequest {
+  readonly tournamentType: TournamentType;
+  readonly periodKey: string;
+  readonly tokenAddress: string;
+  readonly amount: string;
+}
+
+export interface SponsorBonus {
+  readonly _id: string;
+  readonly tournamentType: TournamentType;
+  readonly tournamentKey: string;
+  readonly tokenAddress: string;
+  readonly amount: string;
+  readonly slotIndex: number;
+  readonly txHash: string;
+  readonly depositedAt: number;
 }

@@ -9,10 +9,11 @@ import { LobbyPage } from './pages/LobbyPage';
 import { GamePage } from './pages/GamePage';
 import { ResultPage } from './pages/ResultPage';
 import { TournamentEntryPage } from './pages/TournamentEntryPage';
+import { AdminPage } from './pages/AdminPage';
 
 // ── Page types ────────────────────────────────────────────────────────────────
 
-export type PageName = 'lobby' | 'game' | 'result' | 'tournament-entry';
+export type PageName = 'lobby' | 'game' | 'result' | 'tournament-entry' | 'admin';
 
 export interface PageContext {
   tournamentType?: TournamentType;
@@ -38,6 +39,7 @@ export default function App() {
           {page === 'game'             && <GamePage  navigate={navigate} ctx={pageCtx} />}
           {page === 'result'           && <ResultPage navigate={navigate} ctx={pageCtx} />}
           {page === 'tournament-entry' && <TournamentEntryPage navigate={navigate} ctx={pageCtx} />}
+          {page === 'admin'            && <AdminPage navigate={navigate} />}
         </WsProvider>
       </AuthProvider>
     </WalletProvider>

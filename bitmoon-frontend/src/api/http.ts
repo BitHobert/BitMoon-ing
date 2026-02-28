@@ -7,6 +7,8 @@ import type {
   SessionEndRequest,
   SessionStartRequest,
   SessionStartResponse,
+  SponsorBonus,
+  SponsorBonusRequest,
   SupplySnapshot,
   TournamentEnterRequest,
   TournamentEnterResponse,
@@ -104,6 +106,30 @@ export function enterTournament(
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
   });
+}
+
+// ── Admin routes (require X-Admin-Secret) ────────────────────────────────────
+
+export function adminDepositBonus(
+  adminSecret: string,
+  body: SponsorBonusRequest,
+): Promise<{ success: boolean; bonus: SponsorBonus }> {
+  return request('/v1/admin/sponsor-bonus', {
+    method: 'POST',
+    headers: { 'X-Admin-Secret': adminSecret },
+    body: JSON.stringify(body),
+  });
+}
+
+export function adminGetBonuses(
+  adminSecret: string,
+  tournamentType: TournamentType,
+  periodKey: string,
+): Promise<{ tournamentType: TournamentType; periodKey: string; bonuses: SponsorBonus[] }> {
+  return request(
+    `/v1/admin/sponsor-bonus?tournamentType=${tournamentType}&periodKey=${encodeURIComponent(periodKey)}`,
+    { headers: { 'X-Admin-Secret': adminSecret } },
+  );
 }
 
 export { ApiError };
