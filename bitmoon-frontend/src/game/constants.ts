@@ -13,9 +13,9 @@ export const PLAYER_SHOOT_RATE = 12;     // frames between auto-shots
 export const BULLET_SPEED      = 10;     // px/frame
 
 // ── Planet / Moon ─────────────────────────────────────────────────────────────
-export const MOON_SPEED  = 1.2;   // px/frame (slow, player must protect it)
+export const MOON_SPEED  = 0.6;   // px/frame (slow drift left→right, player protects it)
 export const MOON_Y_LANE = 0.35;  // fraction of canvas height
-export const MOON_RADIUS = 88;    // collision radius px (doubled again)
+export const MOON_RADIUS = 56;    // collision / visual radius px
 
 export interface PlanetConfig {
   readonly glyph:    string;

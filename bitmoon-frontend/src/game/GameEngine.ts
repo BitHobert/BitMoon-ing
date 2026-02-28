@@ -237,7 +237,7 @@ export class GameEngine {
     if (!s.moonSpawned && s.nextSpawns.length > 0 && elapsedTicks >= s.nextSpawns[0].delayFrames + 30) {
       const planet = s.currentPlanet;
       s.moon = {
-        x:           CANVAS_W + MOON_RADIUS * 2,
+        x:           -MOON_RADIUS * 2,
         y:           CANVAS_H * MOON_Y_LANE,
         alive:       true,
         flashFrames: 0,
@@ -478,9 +478,9 @@ export class GameEngine {
   private moveMoon(): void {
     const s = this.state;
     if (!s.moon || !s.moon.alive) return;
-    s.moon.x -= MOON_SPEED;
+    s.moon.x += MOON_SPEED;
     if (s.moon.flashFrames > 0) s.moon.flashFrames--;
-    if (s.moon.x < -MOON_RADIUS * 2) s.moon = null;
+    if (s.moon.x > CANVAS_W + MOON_RADIUS * 2) s.moon = null;
   }
 
   // ── Boss movement (patrol + sine Y) ──────────────────────────────────────────
@@ -800,7 +800,7 @@ export class GameEngine {
 
     const allSpawned   = s.nextSpawns.length === 0;
     const noEnemies    = s.enemies.filter(e => e.alive).length === 0;
-    const moonResolved = s.moon === null || !s.moon.alive || s.moon.x < 0;
+    const moonResolved = s.moon === null || !s.moon.alive || s.moon.x > CANVAS_W;
     const bossResolved = !s.boss || !s.boss.alive;
 
     if (allSpawned && noEnemies && moonResolved && bossResolved) {
@@ -855,7 +855,7 @@ export class GameEngine {
       ctx.globalAlpha = alpha;
       const pImg = m.spriteId ? this.sprites.get(m.spriteId) : null;
       if (pImg?.complete && pImg.naturalWidth > 0) {
-        const pw = m.spriteId === 'sprites/planet-saturn.png' ? 160 : 128;
+        const pw = m.spriteId === 'sprites/planet-saturn.png' ? 200 : 160;
         ctx.drawImage(pImg, m.x - pw / 2, m.y - pw / 2, pw, pw);
       } else if (m.spriteId === 'sprites/planet-nebula.png') {
         this.drawPurplePlanet(ctx, m.x, m.y);
