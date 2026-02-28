@@ -71,12 +71,13 @@ export function GamePage({ navigate, ctx }: Props) {
       return;
     }
     try {
-      await endSession(token, {
+      const result = await endSession(token, {
         sessionId,
         events,
         clientScore: finalScore,
         clientBurned: burned.toString(),
       });
+      sessionStorage.setItem('lastScoreResult', JSON.stringify(result));
     } catch (err) {
       console.error('endSession failed:', err);
     }
