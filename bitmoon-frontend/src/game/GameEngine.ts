@@ -23,7 +23,6 @@ const TIER_COLORS: Record<TierNumber, string> = {
 export class GameEngine {
   private readonly ctx:    CanvasRenderingContext2D;
   private readonly cbs:    GameCallbacks;
-  private scarcityMultiplier: number;
   private state:    GameState;
   private events:   GameEvent[] = [];
   private rafId:    number | null = null;
@@ -38,10 +37,8 @@ export class GameEngine {
 
   constructor(
     canvas: HTMLCanvasElement,
-    scarcityMultiplier: number,
     callbacks: GameCallbacks,
   ) {
-    this.scarcityMultiplier = scarcityMultiplier;
     this.cbs    = callbacks;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas 2D context not available');
@@ -85,10 +82,6 @@ export class GameEngine {
     if (this.rafId !== null) { cancelAnimationFrame(this.rafId); this.rafId = null; }
     window.removeEventListener('keydown', this.boundKeyDown);
     window.removeEventListener('keyup',   this.boundKeyUp);
-  }
-
-  public updateScarcity(mult: number): void {
-    this.scarcityMultiplier = mult;
   }
 
   public getEvents():       GameEvent[]        { return [...this.events]; }
@@ -399,7 +392,7 @@ export class GameEngine {
         e.flashFrames = 4;
         if (e.hp <= 0) {
           e.alive = false;
-          const pts = Math.round(e.cfg.basePoints * this.scarcityMultiplier);
+          const pts = e.cfg.basePoints;
           s.score += pts;
           s.kills++;
           s.burned += e.cfg.burnUnits;
@@ -407,7 +400,7 @@ export class GameEngine {
           this.audio?.playEnemyKill();
           this.events.push({ tick: s.tick, type: 'kill', tier: e.tier, wave: s.wave });
           this.cbs.onScore(s.score);
-          this.cbs.onKill(e.tier, pts, this.scarcityMultiplier);
+          this.cbs.onKill(e.tier, pts);
           this.tryDropPowerup(e.x, e.y);
         }
       }
@@ -428,7 +421,7 @@ export class GameEngine {
           if (s.boss.hp <= 0) {
             s.boss.alive = false;
             this.bossHpPool.delete(s.boss.poolIndex);
-            const pts = Math.round(s.boss.cfg.points * this.scarcityMultiplier);
+            const pts = s.boss.cfg.points;
             s.score += pts;
             s.kills++;
             s.burned += s.boss.cfg.burnUnits;
@@ -438,7 +431,7 @@ export class GameEngine {
             this.audio?.playBossKill();
             this.events.push({ tick: s.tick, type: 'kill', tier: 5, wave: s.wave });
             this.cbs.onScore(s.score);
-            this.cbs.onKill(5, pts, this.scarcityMultiplier);
+            this.cbs.onKill(5, pts);
           }
         }
       }
@@ -588,7 +581,7 @@ export class GameEngine {
 
         if (e.hp <= 0) {
           e.alive = false;
-          const pts = Math.round(e.cfg.basePoints * this.scarcityMultiplier);
+          const pts = e.cfg.basePoints;
           s.score += pts;
           s.kills++;
           s.burned += e.cfg.burnUnits;
@@ -596,7 +589,7 @@ export class GameEngine {
           this.audio?.playEnemyKill();
           this.events.push({ tick: s.tick, type: 'kill', tier: e.tier, wave: s.wave });
           this.cbs.onScore(s.score);
-          this.cbs.onKill(e.tier, pts, this.scarcityMultiplier);
+          this.cbs.onKill(e.tier, pts);
           // Chance to drop a powerup
           this.tryDropPowerup(e.x, e.y);
         }
@@ -622,7 +615,7 @@ export class GameEngine {
           s.boss.alive = false;
           // Reset persisted HP — next encounter starts fresh
           this.bossHpPool.delete(s.boss.poolIndex);
-          const pts = Math.round(s.boss.cfg.points * this.scarcityMultiplier);
+          const pts = s.boss.cfg.points;
           s.score += pts;
           s.kills++;
           s.burned += s.boss.cfg.burnUnits;
@@ -633,7 +626,7 @@ export class GameEngine {
           this.audio?.playBossKill();
           this.events.push({ tick: s.tick, type: 'kill', tier: 5, wave: s.wave });
           this.cbs.onScore(s.score);
-          this.cbs.onKill(5, pts, this.scarcityMultiplier);
+          this.cbs.onKill(5, pts);
         }
         break;
       }

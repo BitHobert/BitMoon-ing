@@ -16,14 +16,12 @@ const WS_URL: string =
 
 interface WsContextValue {
   supply: SupplySnapshot | null;
-  scarcityMultiplier: number;
   latestKills: KillFeedEntry[];
   connected: boolean;
 }
 
 const WsContext = createContext<WsContextValue>({
   supply: null,
-  scarcityMultiplier: 1,
   latestKills: [],
   connected: false,
 });
@@ -33,7 +31,6 @@ const MAX_KILL_FEED = 10;
 export function WsProvider({ children }: { children: ReactNode }) {
   const clientRef = useRef<WsClient | null>(null);
   const [supply, setSupply] = useState<SupplySnapshot | null>(null);
-  const [scarcityMultiplier, setScarcityMultiplier] = useState(1);
   const [latestKills, setLatestKills] = useState<KillFeedEntry[]>([]);
   const [connected, setConnected] = useState(false);
 
@@ -43,7 +40,6 @@ export function WsProvider({ children }: { children: ReactNode }) {
 
     client.subscribe('supply_update', (data) => {
       setSupply(data);
-      setScarcityMultiplier(data.scarcityMultiplier);
       setConnected(true);
     });
 
@@ -60,7 +56,7 @@ export function WsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <WsContext.Provider value={{ supply, scarcityMultiplier, latestKills, connected }}>
+    <WsContext.Provider value={{ supply, latestKills, connected }}>
       {children}
     </WsContext.Provider>
   );

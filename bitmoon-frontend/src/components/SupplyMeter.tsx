@@ -14,7 +14,6 @@ export function SupplyMeter() {
 
   const currentRaw  = supply ? BigInt(supply.currentSupply) : INITIAL_SUPPLY;
   const pct         = Number((currentRaw * 10000n) / INITIAL_SUPPLY) / 100;
-  const multiplier  = supply?.scarcityMultiplier ?? 1;
 
   const barColor =
     pct > 50 ? 'var(--color-green)' :
@@ -52,14 +51,6 @@ export function SupplyMeter() {
         textAlign: 'right',
       }}>
         {supply ? formatSupply(supply.currentSupply) : '—'}
-      </div>
-      <div style={{
-        fontFamily: 'var(--font-pixel)',
-        fontSize: 8,
-        color: 'var(--color-blue)',
-        whiteSpace: 'nowrap',
-      }}>
-        {multiplier.toFixed(2)}×
       </div>
     </div>
   );

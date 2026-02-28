@@ -103,7 +103,7 @@ export function GamePage({ navigate, ctx }: Props) {
     navigate('result', { resultSessionId: sessionId });
   }, [navigate]);
 
-  const handleKill = useCallback((_tier: TierNumber, _pts: number, _mult: number) => {
+  const handleKill = useCallback((_tier: TierNumber, _pts: number) => {
     // Kill feed will be emitted via WebSocket from the backend when session ends;
     // for now just track locally via score callback
   }, []);

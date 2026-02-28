@@ -15,8 +15,7 @@ interface SupplyDoc {
  * GameSupplyService manages the global in-game token supply counter.
  *
  * The supply starts at INITIAL_SUPPLY and is atomically decremented each
- * time a game session ends with validated kills. As supply drops, the
- * scarcity multiplier increases — driving higher scores across all players.
+ * time a game session ends with validated kills.
  *
  * This is a pure game mechanic: no on-chain transactions occur.
  */
@@ -64,7 +63,7 @@ export class GameSupplyService {
     // ── Read ─────────────────────────────────────────────────────────────────
 
     /**
-     * Get the current supply snapshot including scarcity multiplier.
+     * Get the current supply snapshot.
      * Fast: single MongoDB document read.
      */
     public async getSnapshot(): Promise<SupplySnapshot> {
@@ -75,7 +74,7 @@ export class GameSupplyService {
         return {
             currentSupply,
             totalBurned,
-            scarcityMultiplier: this.computeMultiplier(currentSupply),
+            scarcityMultiplier: 1.0,
             sequenceNumber: doc.sequenceNumber,
             timestamp: Date.now(),
         };
@@ -140,13 +139,4 @@ export class GameSupplyService {
         return doc;
     }
 
-    /**
-     * Scarcity multiplier = initialSupply / currentSupply.
-     * Grows as supply is consumed. Capped at 4x.
-     */
-    private computeMultiplier(currentSupply: bigint): number {
-        if (currentSupply <= 0n) return 4.0;
-        const ratio = Number(Config.INITIAL_SUPPLY) / Number(currentSupply);
-        return Math.min(4.0, ratio);
-    }
 }

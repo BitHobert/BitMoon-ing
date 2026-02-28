@@ -4,7 +4,6 @@ import { AudioEngine } from '../game/AudioEngine';
 import { CANVAS_W, CANVAS_H } from '../game/constants';
 import type { PlanetConfig } from '../game/constants';
 import type { PowerupKind } from '../game/constants';
-import { useWsContext } from '../context/WsContext';
 import type { TierNumber, GameEvent } from '../types';
 
 interface Props {
@@ -12,7 +11,7 @@ interface Props {
   onScore:    (score: number)  => void;
   onWave:     (wave: number)   => void;
   onLives:    (lives: number)  => void;
-  onKill:     (tier: TierNumber, points: number, mult: number) => void;
+  onKill:     (tier: TierNumber, points: number) => void;
   onPlanet:   (planet: PlanetConfig | null) => void;
   onPowerup:  (kind: PowerupKind | null, weaponFrames: number, laserFrames: number, shieldCount: number) => void;
 }
@@ -21,12 +20,6 @@ export function GameCanvas({ onGameOver, onScore, onWave, onLives, onKill, onPla
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const audioRef  = useRef<AudioEngine | null>(null);
-  const { scarcityMultiplier } = useWsContext();
-
-  // Update scarcity multiplier live without restarting engine
-  useEffect(() => {
-    engineRef.current?.updateScarcity(scarcityMultiplier);
-  }, [scarcityMultiplier]);
 
   const handleGameOver = useCallback((score: number, burned: bigint) => {
     const events = engineRef.current?.getEvents() ?? [];
@@ -52,7 +45,7 @@ export function GameCanvas({ onGameOver, onScore, onWave, onLives, onKill, onPla
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const engine = new GameEngine(canvas, scarcityMultiplier, {
+    const engine = new GameEngine(canvas, {
       onScore,
       onWave,
       onLives,

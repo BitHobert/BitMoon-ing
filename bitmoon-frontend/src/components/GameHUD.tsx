@@ -1,5 +1,4 @@
 import { PLAYER_LIVES } from '../game/constants';
-import { useWsContext } from '../context/WsContext';
 
 interface Props {
   score:      number;
@@ -9,8 +8,6 @@ interface Props {
 }
 
 export function GameHUD({ score, wave, lives, tournamentType }: Props) {
-  const { scarcityMultiplier } = useWsContext();
-
   return (
     <div style={{
       display: 'flex',
@@ -31,7 +28,6 @@ export function GameHUD({ score, wave, lives, tournamentType }: Props) {
       <div style={{ display: 'flex', gap: 24, alignItems: 'center', flex: 1, justifyContent: 'center' }}>
         <Stat label="SCORE"  value={score.toLocaleString()} color="var(--color-orange)" />
         <Stat label="WAVE"   value={String(wave).padStart(2, '0')} color="var(--color-blue)" />
-        <Stat label="MULT"   value={`${scarcityMultiplier.toFixed(2)}×`} color="#ffd700" />
         {tournamentType && (
           <Stat label="MODE"   value={tournamentType.toUpperCase()} color="#b975ff" />
         )}

@@ -122,7 +122,7 @@ export interface GameCallbacks {
   onWave:     (wave: number) => void;
   onLives:    (lives: number) => void;
   onGameOver: (finalScore: number, burned: bigint) => void;
-  onKill:     (tier: TierNumber, points: number, scarcityMultiplier: number) => void;
+  onKill:     (tier: TierNumber, points: number) => void;
   onPlanet:   (planet: PlanetConfig | null) => void;
   onPowerup:  (kind: PowerupKind | null, weaponFrames: number, laserFrames: number, shieldCount: number) => void;
 }
