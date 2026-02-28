@@ -88,19 +88,28 @@ export function TournamentCard({ info, navigate, currentBlock, playerRank }: Pro
         </div>
         <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginTop: 2 }}>tBTC</div>
         {info.sponsorBonuses && info.sponsorBonuses.length > 0 && (() => {
-          const totalBonus = info.sponsorBonuses.reduce((sum, b) => sum + BigInt(b.amount), 0n);
+          // Group bonuses by token symbol and show each separately
+          const bySymbol = new Map<string, bigint>();
+          for (const b of info.sponsorBonuses) {
+            const sym = b.tokenSymbol || 'BONUS';
+            bySymbol.set(sym, (bySymbol.get(sym) ?? 0n) + BigInt(b.amount));
+          }
           return (
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 6,
-              padding: '3px 8px', borderRadius: 3,
-              background: 'rgba(57,255,20,0.1)', border: '1px solid rgba(57,255,20,0.3)',
-            }}>
-              <span style={{ fontSize: 10 }}>⭐</span>
-              <span style={{
-                fontSize: 8, fontFamily: 'var(--font-pixel)', color: 'var(--color-green)',
-              }}>
-                +{formatTokens(totalBonus.toString())} BONUS
-              </span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+              {[...bySymbol.entries()].map(([sym, total]) => (
+                <div key={sym} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  padding: '3px 8px', borderRadius: 3,
+                  background: 'rgba(57,255,20,0.1)', border: '1px solid rgba(57,255,20,0.3)',
+                }}>
+                  <span style={{ fontSize: 10 }}>⭐</span>
+                  <span style={{
+                    fontSize: 8, fontFamily: 'var(--font-pixel)', color: 'var(--color-green)',
+                  }}>
+                    +{formatTokens(total.toString())} {sym}
+                  </span>
+                </div>
+              ))}
             </div>
           );
         })()}

@@ -231,7 +231,7 @@ export interface TournamentInfo {
     /** Whether the current block is within this period's active range */
     readonly isActive: boolean;
     /** Sponsor bonuses deposited for this tournament period (if any) */
-    readonly sponsorBonuses?: ReadonlyArray<{ readonly tokenAddress: string; readonly amount: string }>;
+    readonly sponsorBonuses?: ReadonlyArray<{ readonly tokenAddress: string; readonly tokenSymbol: string; readonly amount: string }>;
 }
 
 export interface PrizeDistribution {
@@ -272,6 +272,8 @@ export interface SponsorBonusRequest {
     readonly periodKey: string;
     /** OP-20 token contract address of the sponsor's bonus token */
     readonly tokenAddress: string;
+    /** Human-readable token ticker symbol (e.g. "MOTO", "tBTC") */
+    readonly tokenSymbol: string;
     /** Bonus amount in raw token units (positive integer as string, for BigInt safety) */
     readonly amount: string;
 }
@@ -287,6 +289,8 @@ export interface SponsorBonus {
     readonly tournamentKey: string;
     /** OP-20 token contract address of the bonus token */
     readonly tokenAddress: string;
+    /** Human-readable token ticker symbol (e.g. "MOTO", "tBTC") */
+    readonly tokenSymbol: string;
     /** Bonus amount in raw token units, as string */
     readonly amount: string;
     /** On-chain slot index assigned by the contract (0-based) */

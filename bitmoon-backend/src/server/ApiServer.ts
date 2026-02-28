@@ -334,6 +334,7 @@ export class ApiServer {
                         ...t,
                         sponsorBonuses: bonuses.map(b => ({
                             tokenAddress: b.tokenAddress,
+                            tokenSymbol: b.tokenSymbol,
                             amount: b.amount,
                         })),
                     };
@@ -593,7 +594,7 @@ export class ApiServer {
         try { body = await req.json() as SponsorBonusRequest; }
         catch { res.status(400).json({ error: 'Invalid JSON body' }); return; }
 
-        const { tournamentType, periodKey, tokenAddress, amount } = body;
+        const { tournamentType, periodKey, tokenAddress, tokenSymbol, amount } = body;
 
         if (!tournamentType || !['daily', 'weekly', 'monthly'].includes(tournamentType)) {
             res.status(400).json({ error: 'tournamentType must be daily | weekly | monthly' });
@@ -607,6 +608,10 @@ export class ApiServer {
             res.status(400).json({ error: 'tokenAddress must be a non-empty string' });
             return;
         }
+        if (!tokenSymbol || typeof tokenSymbol !== 'string' || tokenSymbol.trim() === '') {
+            res.status(400).json({ error: 'tokenSymbol must be a non-empty string (e.g. "MOTO")' });
+            return;
+        }
         if (!amount || !/^\d+$/.test(amount) || BigInt(amount) <= 0n) {
             res.status(400).json({ error: 'amount must be a positive integer string (raw token units)' });
             return;
@@ -614,7 +619,7 @@ export class ApiServer {
 
         try {
             const bonus = await PrizeDistributorService.getInstance()
-                .depositBonus(tournamentType, periodKey, tokenAddress.trim(), BigInt(amount));
+                .depositBonus(tournamentType, periodKey, tokenAddress.trim(), tokenSymbol.trim().toUpperCase(), BigInt(amount));
             res.status(201).json({ success: true, bonus });
         } catch (err: unknown) {
             const message = (err as Error).message ?? 'depositBonus failed';

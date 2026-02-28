@@ -152,6 +152,7 @@ export class PrizeDistributorService {
         tournamentType: TournamentType,
         periodKey: string,
         tokenAddress: string,
+        tokenSymbol: string,
         amount: bigint,
     ): Promise<SponsorBonus> {
         if (!this.isContractReady()) {
@@ -188,6 +189,7 @@ export class PrizeDistributorService {
             tournamentType,
             tournamentKey:  periodKey,
             tokenAddress,
+            tokenSymbol,
             amount:         amount.toString(),
             slotIndex,
             txHash:         txid,

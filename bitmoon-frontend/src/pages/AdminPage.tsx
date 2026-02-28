@@ -31,6 +31,7 @@ export function AdminPage({ navigate }: Props) {
   const [depositType, setDepositType]         = useState<TournamentType>('daily');
   const [depositPeriodKey, setDepositPeriodKey] = useState('');
   const [depositToken, setDepositToken]       = useState('');
+  const [depositSymbol, setDepositSymbol]     = useState('');
   const [depositAmount, setDepositAmount]     = useState('');
   const [depositStatus, setDepositStatus]     = useState<{ ok: boolean; msg: string } | null>(null);
   const [depositing, setDepositing]           = useState(false);
@@ -54,6 +55,7 @@ export function AdminPage({ navigate }: Props) {
         tournamentType: depositType,
         periodKey: depositPeriodKey,
         tokenAddress: depositToken.trim(),
+        tokenSymbol: depositSymbol.trim().toUpperCase(),
         amount: depositAmount.trim(),
       });
       setDepositStatus({ ok: true, msg: `Deposited! Slot #${result.bonus.slotIndex} — tx: ${truncate(result.bonus.txHash, 20)}` });
@@ -185,15 +187,27 @@ export function AdminPage({ navigate }: Props) {
             </div>
           </div>
 
-          <div>
-            <label style={labelStyle}>TOKEN ADDRESS</label>
-            <input
-              type="text"
-              placeholder="OP-20 token contract address"
-              value={depositToken}
-              onChange={e => setDepositToken(e.target.value)}
-              style={inputStyle}
-            />
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ flex: 3, minWidth: 200 }}>
+              <label style={labelStyle}>TOKEN ADDRESS</label>
+              <input
+                type="text"
+                placeholder="OP-20 token contract address"
+                value={depositToken}
+                onChange={e => setDepositToken(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+            <div style={{ flex: 1, minWidth: 100 }}>
+              <label style={labelStyle}>TOKEN SYMBOL</label>
+              <input
+                type="text"
+                placeholder="e.g. MOTO"
+                value={depositSymbol}
+                onChange={e => setDepositSymbol(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
           </div>
 
           <div>
@@ -211,7 +225,7 @@ export function AdminPage({ navigate }: Props) {
             className="btn btn-solid-orange"
             style={{ fontSize: 9, alignSelf: 'flex-start', padding: '10px 24px' }}
             onClick={handleDeposit}
-            disabled={depositing || !depositPeriodKey || !depositToken || !depositAmount}
+            disabled={depositing || !depositPeriodKey || !depositToken || !depositSymbol || !depositAmount}
           >
             {depositing ? 'DEPOSITING…' : 'DEPOSIT BONUS'}
           </button>
@@ -286,7 +300,7 @@ export function AdminPage({ navigate }: Props) {
                 }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                      {['SLOT', 'TOKEN', 'AMOUNT', 'TX HASH', 'DATE'].map(h => (
+                      {['SLOT', 'SYMBOL', 'TOKEN', 'AMOUNT', 'TX HASH', 'DATE'].map(h => (
                         <th key={h} style={{
                           padding: '8px 6px', textAlign: 'left',
                           fontFamily: 'var(--font-pixel)', fontSize: 7,
@@ -302,6 +316,9 @@ export function AdminPage({ navigate }: Props) {
                         background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
                       }}>
                         <td style={{ padding: '6px', color: 'var(--color-orange)' }}>#{b.slotIndex}</td>
+                        <td style={{ padding: '6px', color: 'var(--color-green)', fontFamily: 'var(--font-pixel)' }}>
+                          {b.tokenSymbol}
+                        </td>
                         <td style={{ padding: '6px', color: 'var(--color-text)' }} title={b.tokenAddress}>
                           {truncate(b.tokenAddress)}
                         </td>
