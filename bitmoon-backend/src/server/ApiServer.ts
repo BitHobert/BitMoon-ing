@@ -289,7 +289,7 @@ export class ApiServer {
 
         res.json({
             isValid: result.isValid,
-            score: result.validatedScore,
+            validatedScore: result.validatedScore,
             totalBurned: result.totalBurned.toString(),
             wavesCleared: result.wavesCleared,
             kills: result.kills,

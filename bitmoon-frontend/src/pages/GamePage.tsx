@@ -63,10 +63,21 @@ export function GamePage({ navigate, ctx }: Props) {
   }, []);
 
   const handleGameOver = useCallback(async (events: GameEvent[], finalScore: number, burned: bigint) => {
+    // Count kills and waves from the events array (works for both guest and auth)
+    const kills = events.filter(e => e.type === 'kill').length;
+    const wavesCleared = events.filter(e => e.type === 'wave_clear').length;
+
     const sessionId = sessionIdRef.current;
     const token     = tokenRef.current;
     if (!sessionId || !token) {
-      // No session — just navigate to result with client score
+      // Guest mode — store client-side stats so ResultPage can display them
+      sessionStorage.setItem('lastScoreResult', JSON.stringify({
+        isValid: true,
+        validatedScore: finalScore,
+        kills,
+        wavesCleared,
+        totalBurned: burned.toString(),
+      }));
       navigate('result', { resultSessionId: undefined });
       return;
     }
@@ -80,6 +91,14 @@ export function GamePage({ navigate, ctx }: Props) {
       sessionStorage.setItem('lastScoreResult', JSON.stringify(result));
     } catch (err) {
       console.error('endSession failed:', err);
+      // Server call failed — fall back to client-side stats
+      sessionStorage.setItem('lastScoreResult', JSON.stringify({
+        isValid: true,
+        validatedScore: finalScore,
+        kills,
+        wavesCleared,
+        totalBurned: burned.toString(),
+      }));
     }
     navigate('result', { resultSessionId: sessionId });
   }, [navigate]);
