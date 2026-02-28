@@ -73,6 +73,13 @@ export function LobbyPage({ navigate }: Props) {
           BITMOON'ING
         </div>
         <SupplyMeter />
+        <button
+          className="btn btn-blue"
+          style={{ fontSize: 8, padding: '6px 12px' }}
+          onClick={() => navigate('guide')}
+        >
+          📖 GUIDE
+        </button>
         <WalletButton />
       </header>
 
