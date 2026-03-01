@@ -77,15 +77,20 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
   }, [tournamentType, navigate]);
 
   // ── Ensure auth token before paying ───────────────────────────────────────
+  // NOTE: Do NOT pass tournamentType here — this token is only for the
+  // enterTournament API call. The backend's createSession rejects
+  // tournament sessions when no verified entry exists yet (chicken-and-egg).
+  // The actual tournament game session is created later by GamePage.
   const ensureToken = useCallback(async (): Promise<string | null> => {
     if (auth.token) return auth.token;
     if (!wallet.address) return null;
-    const token = await auth.login(wallet.address, wallet.signMessage, wallet.getPublicKey, tournamentType);
+    const token = await auth.login(wallet.address, wallet.signMessage, wallet.getPublicKey);
     return token;
-  }, [auth, wallet.address, wallet.signMessage, wallet.getPublicKey, tournamentType]);
+  }, [auth, wallet.address, wallet.signMessage, wallet.getPublicKey]);
 
   // ── Pay entry fee ─────────────────────────────────────────────────────────
   const handlePay = useCallback(async () => {
+    console.log('[handlePay] start', { tournament: !!tournament, address: wallet.address });
     if (!tournament || !wallet.address) return;
 
     // Tournament entry requires OP_WALLET (UnisatSigner is FORBIDDEN for OPNet contract calls)
@@ -98,7 +103,18 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
       return;
     }
 
-    const token = await ensureToken();
+    console.log('[handlePay] calling ensureToken…');
+    let token: string | null;
+    try {
+      token = await ensureToken();
+      console.log('[handlePay] ensureToken returned:', token ? 'OK' : 'NULL');
+    } catch (err) {
+      console.error('[handlePay] ensureToken threw:', err);
+      setErrorMsg(err instanceof Error ? err.message : 'Auth failed');
+      setStep('error');
+      return;
+    }
+
     if (!token) {
       setErrorMsg('Authentication failed. Please reconnect your wallet.');
       setStep('error');
@@ -107,22 +123,27 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
 
     setStep('paying');
     setErrorMsg(null);
+    console.log('[handlePay] step=paying, starting OPNet interaction…');
 
     try {
       // 1. Fetch UTXOs from OPNet node
       const network  = rpcNetwork();
       const provider = new JSONRpcProvider({ url: OPNET_RPC, network });
+      console.log('[handlePay] fetching UTXOs…');
       const utxos    = await provider.utxoManager.getUTXOs({
         address:  wallet.address,
         optimize: false,
       });
+      console.log('[handlePay] UTXOs fetched:', utxos?.length ?? 0);
 
       // 2. Encode OP-20 transfer(prizeContractAddress, entryFee) calldata
+      console.log('[handlePay] encoding calldata, prizeContract:', tournament.prizeContractAddress);
       const writer = new BinaryWriter();
       writer.writeSelector(0xa9059cbb);                         // transfer(address,uint256)
       writer.writeAddress(Address.fromString(tournament.prizeContractAddress));
       writer.writeU256(BigInt(tournament.entryFee));
       const calldata = writer.getBuffer();
+      console.log('[handlePay] calldata encoded, calling signAndBroadcastInteraction…');
 
       // 3. Sign & broadcast via OP_WALLET (signer-less browser path)
       const opnetWallet = (window as Window & { opnet?: Record<string, unknown> }).opnet!;
@@ -143,6 +164,7 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
 
       const txid = interactionResult.txid;
       setTxHash(txid);
+      console.log('[handlePay] tx broadcast:', txid);
 
       // 4. Confirm with backend
       setStep('confirming');
@@ -152,9 +174,11 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
       });
 
       setStep('done');
+      console.log('[handlePay] entry confirmed!');
       setTimeout(() => navigate('game', { tournamentType: tournament.tournamentType }), 2500);
 
     } catch (err: unknown) {
+      console.error('[handlePay] error:', err);
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMsg(msg);
       setStep('error');
