@@ -3,7 +3,6 @@ import type { NavigateFn } from '../App';
 import { getTournaments, getTournamentLeaderboard } from '../api/http';
 import type { TournamentInfo, TournamentType } from '../types';
 import { WalletButton } from '../components/WalletButton';
-import { SupplyMeter } from '../components/SupplyMeter';
 import { TournamentCard } from '../components/TournamentCard';
 import { TournamentLeaderboard } from '../components/TournamentLeaderboard';
 import { LeaderboardTable } from '../components/LeaderboardTable';
@@ -72,7 +71,6 @@ export function LobbyPage({ navigate }: Props) {
         <div className="pixel glow-orange" style={{ fontSize: 14, letterSpacing: 2 }}>
           BITMOON'ING
         </div>
-        <SupplyMeter />
         <button
           className="btn btn-blue"
           style={{ fontSize: 8, padding: '6px 12px' }}
@@ -92,7 +90,7 @@ export function LobbyPage({ navigate }: Props) {
             SHOOT TO EARN
           </h1>
           <p style={{ color: 'var(--color-text-dim)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-            Kill enemies · burn supply · climb the leaderboard · win OP-20 prizes
+            Kill enemies · climb the leaderboard · win prizes
           </p>
           <button
             className="btn btn-solid-orange"
@@ -123,31 +121,26 @@ export function LobbyPage({ navigate }: Props) {
           </section>
         )}
 
-        {/* Tournament live rankings */}
+        {/* Tournament rankings */}
         {tournaments.length > 0 && (
           <section style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
             <TournamentLeaderboard prizePools={prizePools} />
           </section>
         )}
 
-        {/* Global leaderboard + player stats */}
+        {/* Free play all-time + past winners + player stats */}
         <section style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-          <div style={{ flex: 1, minWidth: 280 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <span className="pixel" style={{ fontSize: 9, color: 'var(--color-text-dim)' }}>
-                LEADERBOARD
-              </span>
-              <button
-                className="btn btn-blue"
-                style={{ fontSize: 7, padding: '4px 10px' }}
-                onClick={() => setShowWinners(true)}
-              >
-                🏆 PAST WINNERS
-              </button>
-            </div>
-            <LeaderboardTable />
+          <LeaderboardTable />
+          <div style={{ flex: '0 0 240px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <button
+              className="btn btn-blue"
+              style={{ width: '100%', fontSize: 8, padding: '8px 12px' }}
+              onClick={() => setShowWinners(true)}
+            >
+              🏆 PAST WINNERS
+            </button>
+            {address && <PlayerCard address={address} />}
           </div>
-          {address && <PlayerCard address={address} />}
         </section>
 
       </main>

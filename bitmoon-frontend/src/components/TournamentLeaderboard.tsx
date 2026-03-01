@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getTournamentLeaderboard } from '../api/http';
 import { useWalletContext } from '../context/WalletContext';
-import type { LeaderboardEntry, TournamentType, BadgeLevel } from '../types';
+import type { LeaderboardEntry, TournamentType } from '../types';
 
 const TYPE_LABELS: Record<TournamentType, string> = {
   daily: 'DAILY', weekly: 'WEEKLY', monthly: 'MONTHLY',
@@ -12,14 +12,6 @@ const TYPE_COLORS: Record<TournamentType, string> = {
   monthly: '#b975ff',
 };
 const TYPES: TournamentType[] = ['daily', 'weekly', 'monthly'];
-
-const BADGE_ICONS: Record<BadgeLevel, string> = {
-  bronze:  '🥉',
-  silver:  '🥈',
-  gold:    '🥇',
-  diamond: '💎',
-  lunar:   '🌕',
-};
 
 function truncate(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
@@ -58,11 +50,11 @@ export function TournamentLeaderboard({ prizePools }: Props) {
   const color    = TYPE_COLORS[type];
   const prizeRaw = prizePools[type] ?? '0';
 
-  // Prize split: 1st 50 % · 2nd 30 % · 3rd 20 %
+  // Prize split: 1st 70 % · 2nd 20 % · 3rd 10 %
   const prizes = (() => {
     try {
       const pool = BigInt(prizeRaw);
-      return [pool * 50n / 100n, pool * 30n / 100n, pool * 20n / 100n] as const;
+      return [pool * 70n / 100n, pool * 20n / 100n, pool * 10n / 100n] as const;
     } catch { return [0n, 0n, 0n] as const; }
   })();
 
@@ -138,7 +130,6 @@ export function TournamentLeaderboard({ prizePools }: Props) {
               <th style={{ textAlign: 'left',   padding: '4px 8px' }}>#</th>
               <th style={{ textAlign: 'left',   padding: '4px 8px' }}>PLAYER</th>
               <th style={{ textAlign: 'right',  padding: '4px 8px' }}>SCORE</th>
-              <th style={{ textAlign: 'center', padding: '4px 8px' }}>BADGE</th>
             </tr>
           </thead>
           <tbody>
@@ -175,9 +166,6 @@ export function TournamentLeaderboard({ prizePools }: Props) {
                   </td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--font-pixel)', fontSize: 9 }}>
                     {e.score.toLocaleString()}
-                  </td>
-                  <td style={{ padding: '6px 8px', textAlign: 'center', fontSize: 14 }}>
-                    {BADGE_ICONS[e.badgeLevel]}
                   </td>
                 </tr>
               );

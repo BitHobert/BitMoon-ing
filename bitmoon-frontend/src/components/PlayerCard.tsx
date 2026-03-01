@@ -1,23 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getPlayer } from '../api/http';
-import type { PlayerStats, BadgeLevel } from '../types';
+import type { PlayerStats } from '../types';
 import { ApiError } from '../api/http';
-
-const BADGE_LABELS: Record<BadgeLevel, string> = {
-  bronze:  'BRONZE',
-  silver:  'SILVER',
-  gold:    'GOLD',
-  diamond: 'DIAMOND',
-  lunar:   'LUNAR',
-};
-
-const BADGE_COLORS: Record<BadgeLevel, string> = {
-  bronze:  '#cd7f32',
-  silver:  '#c0c0c0',
-  gold:    '#ffd700',
-  diamond: 'var(--color-blue)',
-  lunar:   'var(--color-orange)',
-};
 
 interface Props {
   address: string;
@@ -57,26 +41,18 @@ export function PlayerCard({ address }: Props) {
     return (
       <div className="card" style={{ flex: '0 0 240px', textAlign: 'center', padding: 24 }}>
         <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 9, color: 'var(--color-text-dim)', lineHeight: 2 }}>
-          NEW PLAYER<br />PLAY TO EARN<br />YOUR BADGE
+          NEW PLAYER<br />PLAY TO EARN
         </div>
       </div>
     );
   }
 
-  const badgeColor = BADGE_COLORS[stats.badge];
-
   return (
     <div className="card" style={{ flex: '0 0 240px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {/* Badge */}
+      {/* Address */}
       <div style={{ textAlign: 'center' }}>
-        <div style={{
-          fontFamily: 'var(--font-pixel)',
-          fontSize: 13,
-          color: badgeColor,
-          textShadow: `0 0 10px ${badgeColor}`,
-          marginBottom: 4,
-        }}>
-          {BADGE_LABELS[stats.badge]}
+        <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 9, color: 'var(--color-orange)', marginBottom: 4 }}>
+          YOUR STATS
         </div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--color-text-dim)' }}>
           {`${address.slice(0, 8)}…${address.slice(-6)}`}

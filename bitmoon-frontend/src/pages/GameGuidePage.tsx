@@ -9,12 +9,6 @@ import {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function burnLabel(raw: bigint): string {
-  const tokens = Number(raw) / 1e8;
-  if (tokens >= 1000) return `${(tokens / 1000).toLocaleString()}K`;
-  return tokens.toLocaleString();
-}
-
 function framesTo(s: number): string {
   return `${(s / 60).toFixed(0)}s`;
 }
@@ -81,16 +75,6 @@ const POWERUP_EFFECTS: Record<string, string> = {
   shield: 'Absorbs 1 hit per stack (max 2 stacks)',
 };
 
-// ── Badge config ──────────────────────────────────────────────────────────────
-
-const BADGES = [
-  { level: 'BRONZE',  threshold: '< 100K',     color: '#cd7f32' },
-  { level: 'SILVER',  threshold: '100K – 500K', color: '#c0c0c0' },
-  { level: 'GOLD',    threshold: '500K – 1M',   color: '#ffd700' },
-  { level: 'DIAMOND', threshold: '1M – 5M',     color: '#b9f2ff' },
-  { level: 'LUNAR',   threshold: '5M+',         color: '#b975ff' },
-];
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 interface Props { navigate: NavigateFn; }
@@ -127,7 +111,7 @@ export function GameGuidePage({ navigate }: Props) {
             <table style={tableStyle}>
               <thead>
                 <tr>
-                  {['TIER', '', 'HP', 'POINTS', 'BURN', 'SPEED', 'SHOOTS'].map(h => (
+                  {['TIER', '', 'HP', 'POINTS', 'SPEED', 'SHOOTS'].map(h => (
                     <th key={h} style={thStyle}>{h}</th>
                   ))}
                 </tr>
@@ -145,7 +129,6 @@ export function GameGuidePage({ navigate }: Props) {
                     </td>
                     <td style={{ ...tdStyle, color: 'var(--color-text)' }}>{t.hp}</td>
                     <td style={{ ...tdStyle, color: 'var(--color-green)' }}>{t.basePoints.toLocaleString()}</td>
-                    <td style={{ ...tdStyle, color: 'var(--color-orange)' }}>{burnLabel(t.burnUnits)}</td>
                     <td style={{ ...tdStyle, color: 'var(--color-text)' }}>{t.speedFactor}x</td>
                     <td style={{ ...tdStyle, color: t.firesBack ? '#ff3b3b' : 'var(--color-text-dim)' }}>
                       {t.firesBack ? 'YES ⚠' : 'NO'}
@@ -206,7 +189,7 @@ export function GameGuidePage({ navigate }: Props) {
             <table style={tableStyle}>
               <thead>
                 <tr>
-                  {['', 'NAME', 'HP', 'POINTS', 'BURN', 'FIRE RATE', 'BULLETS'].map(h => (
+                  {['', 'NAME', 'HP', 'POINTS', 'FIRE RATE', 'BULLETS'].map(h => (
                     <th key={h} style={thStyle}>{h}</th>
                   ))}
                 </tr>
@@ -224,7 +207,6 @@ export function GameGuidePage({ navigate }: Props) {
                     </td>
                     <td style={{ ...tdStyle, color: 'var(--color-text)' }}>{b.hp}</td>
                     <td style={{ ...tdStyle, color: 'var(--color-green)' }}>{b.points.toLocaleString()}</td>
-                    <td style={{ ...tdStyle, color: 'var(--color-orange)' }}>{burnLabel(b.burnUnits)}</td>
                     <td style={{ ...tdStyle, color: 'var(--color-text)' }}>
                       every {b.fireRate}f
                     </td>
@@ -276,6 +258,76 @@ export function GameGuidePage({ navigate }: Props) {
           </p>
         </section>
 
+        {/* ── TOURNAMENTS & PRIZES ───────────────────────────────────────── */}
+        <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <h2 className="pixel" style={{ ...sectionTitle, color: 'var(--color-orange)' }}>
+            🏆 TOURNAMENTS & PRIZES
+          </h2>
+
+          <div style={infoBlock}>
+            <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 8, color: 'var(--color-orange)', marginBottom: 4 }}>
+              FEE ALLOCATION
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--color-text-dim)' }}>
+              Every tournament entry fee is split three ways:
+            </div>
+            <div style={{ display: 'flex', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
+              {[
+                { pct: '80%', label: 'PRIZE POOL', color: 'var(--color-green)' },
+                { pct: '15%', label: 'NEXT PERIOD', color: 'var(--color-blue)' },
+                { pct: '5%',  label: 'DEV FEE',    color: 'var(--color-text-dim)' },
+              ].map(s => (
+                <div key={s.label} style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '4px 10px', borderRadius: 3,
+                  background: 'var(--color-bg)', border: '1px solid var(--color-border)',
+                }}>
+                  <span style={{ fontFamily: 'var(--font-pixel)', fontSize: 9, color: s.color }}>{s.pct}</span>
+                  <span style={{ fontSize: 8, fontFamily: 'var(--font-pixel)', color: 'var(--color-text-dim)' }}>{s.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={infoBlock}>
+            <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 8, color: 'var(--color-orange)', marginBottom: 4 }}>
+              PRIZE DISTRIBUTION
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginBottom: 8 }}>
+              At the end of each tournament period, the prize pool is distributed to the top players on-chain:
+            </div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {[
+                { medal: '🥇', pct: '70%', label: '1ST PLACE' },
+                { medal: '🥈', pct: '20%', label: '2ND PLACE' },
+                { medal: '🥉', pct: '10%', label: '3RD PLACE' },
+              ].map(p => (
+                <div key={p.label} style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '4px 10px', borderRadius: 3,
+                  background: 'var(--color-bg)', border: '1px solid var(--color-border)',
+                }}>
+                  <span style={{ fontSize: 12 }}>{p.medal}</span>
+                  <span style={{ fontFamily: 'var(--font-pixel)', fontSize: 9, color: 'var(--color-green)' }}>{p.pct}</span>
+                  <span style={{ fontSize: 8, fontFamily: 'var(--font-pixel)', color: 'var(--color-text-dim)' }}>{p.label}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginTop: 8 }}>
+              If fewer than 3 players enter, the split adjusts automatically. Unclaimed pools roll over to the next period.
+            </div>
+          </div>
+
+          <div style={infoBlock}>
+            <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 8, color: 'var(--color-orange)', marginBottom: 4 }}>
+              SPONSOR BONUSES
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--color-text-dim)' }}>
+              Sponsors can deposit bonus tokens into any tournament period. These bonuses are added on top of the regular prize pool and awarded to the 1st place winner. Sponsor slots are limited to 50 per period.
+            </div>
+          </div>
+        </section>
+
         {/* ── SCORING ────────────────────────────────────────────────────── */}
         <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h2 className="pixel" style={{ ...sectionTitle, color: 'var(--color-blue)' }}>
@@ -318,28 +370,6 @@ export function GameGuidePage({ navigate }: Props) {
             </div>
           </div>
 
-          {/* Badge levels */}
-          <div style={{ marginTop: 8 }}>
-            <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 8, color: 'var(--color-text-dim)', marginBottom: 8 }}>
-              BADGE LEVELS (ALL-TIME BEST)
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {BADGES.map(b => (
-                <div key={b.level} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '4px 10px', borderRadius: 3,
-                  background: 'var(--color-bg)', border: '1px solid var(--color-border)',
-                }}>
-                  <span style={{ fontFamily: 'var(--font-pixel)', fontSize: 7, color: b.color }}>
-                    {b.level}
-                  </span>
-                  <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--color-text-dim)' }}>
-                    {b.threshold}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
         </section>
 
       </main>

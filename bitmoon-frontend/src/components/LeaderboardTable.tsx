@@ -1,60 +1,34 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getLeaderboard } from '../api/http';
-import type { LeaderboardEntry, LeaderboardPeriod, BadgeLevel } from '../types';
-
-const BADGE_ICONS: Record<BadgeLevel, string> = {
-  bronze:  '🥉',
-  silver:  '🥈',
-  gold:    '🥇',
-  diamond: '💎',
-  lunar:   '🌕',
-};
-
-const PERIODS: LeaderboardPeriod[] = ['daily', 'weekly', 'monthly', 'alltime'];
+import type { LeaderboardEntry } from '../types';
 
 function truncate(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
 export function LeaderboardTable() {
-  const [period, setPeriod]   = useState<LeaderboardPeriod>('daily');
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async (p: LeaderboardPeriod) => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getLeaderboard(p, 10);
+      const res = await getLeaderboard('alltime', 10);
       setEntries(res.entries);
     } catch { setEntries([]); }
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { void load(period); }, [period, load]);
+  useEffect(() => { void load(); }, [load]);
 
   return (
     <div className="card" style={{ flex: '1 1 340px' }}>
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid var(--color-border)', paddingBottom: 8 }}>
-        {PERIODS.map((p) => (
-          <button
-            key={p}
-            onClick={() => setPeriod(p)}
-            style={{
-              fontFamily: 'var(--font-pixel)',
-              fontSize: 8,
-              padding: '4px 8px',
-              background: period === p ? 'var(--color-orange)' : 'transparent',
-              color:      period === p ? '#000' : 'var(--color-text-dim)',
-              border: `1px solid ${period === p ? 'var(--color-orange)' : 'transparent'}`,
-              borderRadius: 2,
-              cursor: 'pointer',
-              textTransform: 'uppercase',
-            }}
-          >
-            {p}
-          </button>
-        ))}
+      {/* Title */}
+      <div style={{
+        fontFamily: 'var(--font-pixel)', fontSize: 9,
+        color: 'var(--color-text-dim)', marginBottom: 12,
+      }}>
+        FREE PLAY — ALL TIME
       </div>
 
       {/* Table */}
@@ -73,7 +47,6 @@ export function LeaderboardTable() {
               <th style={{ textAlign: 'left', padding: '4px 8px' }}>#</th>
               <th style={{ textAlign: 'left', padding: '4px 8px' }}>PLAYER</th>
               <th style={{ textAlign: 'right', padding: '4px 8px' }}>SCORE</th>
-              <th style={{ textAlign: 'center', padding: '4px 8px' }}>BADGE</th>
             </tr>
           </thead>
           <tbody>
@@ -90,9 +63,6 @@ export function LeaderboardTable() {
                 </td>
                 <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--font-pixel)', fontSize: 9 }}>
                   {e.score.toLocaleString()}
-                </td>
-                <td style={{ padding: '6px 8px', textAlign: 'center', fontSize: 14 }}>
-                  {BADGE_ICONS[e.badgeLevel]}
                 </td>
               </tr>
             ))}

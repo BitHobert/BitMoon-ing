@@ -40,11 +40,11 @@ export function TournamentCard({ info, navigate, currentBlock, playerRank }: Pro
     ? Math.max(0, Number(BigInt(info.endsAtBlock) - currentBlock))
     : null;
 
-  // Prize split: 1st 50 % · 2nd 30 % · 3rd 20 %
+  // Prize split: 1st 70 % · 2nd 20 % · 3rd 10 %
   const pool   = BigInt(info.prizePool);
-  const prize1 = formatTokens((pool * 50n / 100n).toString());
-  const prize2 = formatTokens((pool * 30n / 100n).toString());
-  const prize3 = formatTokens((pool * 20n / 100n).toString());
+  const prize1 = formatTokens((pool * 70n / 100n).toString());
+  const prize2 = formatTokens((pool * 20n / 100n).toString());
+  const prize3 = formatTokens((pool * 10n / 100n).toString());
 
   return (
     <div className="card" style={{
@@ -148,18 +148,11 @@ export function TournamentCard({ info, navigate, currentBlock, playerRank }: Pro
         <span>🥉 {prize3}</span>
       </div>
 
-      {/* Buttons */}
-      <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
-        <button
-          className="btn btn-blue"
-          style={{ flex: 1, fontSize: 8 }}
-          onClick={() => navigate('game', {})}
-        >
-          PLAY FREE
-        </button>
+      {/* Enter button */}
+      <div style={{ marginTop: 'auto' }}>
         <button
           className="btn btn-solid-orange"
-          style={{ flex: 1, fontSize: 8 }}
+          style={{ width: '100%', fontSize: 8 }}
           onClick={() => navigate('tournament-entry', { tournamentType: info.tournamentType })}
         >
           ENTER
