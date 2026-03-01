@@ -4,8 +4,9 @@ import type { TournamentInfo } from '../types';
 import { getTournaments, enterTournament } from '../api/http';
 import { useWalletContext } from '../context/WalletContext';
 import { useAuthContext } from '../context/AuthContext';
-import { JSONRpcProvider } from 'opnet';
-import { BinaryWriter, MessageSigner } from '@btc-vision/transaction';
+import { getContract, JSONRpcProvider, OP_20_ABI } from 'opnet';
+import type { IOP20Contract } from 'opnet';
+import { MessageSigner } from '@btc-vision/transaction';
 import { networks } from '@btc-vision/bitcoin';
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -126,47 +127,44 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
     console.log('[handlePay] step=paying, starting OPNet interaction…');
 
     try {
-      // 1. Fetch UTXOs from OPNet node
+      // 1. Set up provider and get OP-20 token contract
       const network  = rpcNetwork();
       const provider = new JSONRpcProvider({ url: OPNET_RPC, network });
-      console.log('[handlePay] fetching UTXOs…');
-      const utxos    = await provider.utxoManager.getUTXOs({
-        address:  wallet.address,
-        optimize: false,
-      });
-      console.log('[handlePay] UTXOs fetched:', utxos?.length ?? 0);
 
-      // 2. Resolve prize contract bech32 address → Address object via OPNet node
+      console.log('[handlePay] getting token contract:', tournament.tokenAddress);
+      const tokenContract = getContract<IOP20Contract>(
+        tournament.tokenAddress,
+        OP_20_ABI,
+        provider,
+        network,
+      );
+
+      // 2. Resolve prize contract address
       console.log('[handlePay] resolving prizeContract:', tournament.prizeContractAddress);
       const prizeAddr = await provider.getPublicKeyInfo(tournament.prizeContractAddress, true);
       console.log('[handlePay] resolved prize contract address');
 
-      // 3. Encode OP-20 transfer(prizeContractAddress, entryFee) calldata
-      const writer = new BinaryWriter();
-      writer.writeSelector(0xa9059cbb);                         // transfer(address,uint256)
-      writer.writeAddress(prizeAddr);
-      writer.writeU256(BigInt(tournament.entryFee));
-      const calldata = writer.getBuffer();
-      console.log('[handlePay] calldata encoded, calling signAndBroadcastInteraction…');
+      // 3. Simulate the OP-20 transfer
+      const amount = BigInt(tournament.entryFee);
+      console.log('[handlePay] simulating transfer, amount:', amount.toString());
+      const simulation = await tokenContract.transfer(prizeAddr, amount);
 
-      // 3. Sign & broadcast via OP_WALLET (signer-less browser path)
-      const opnetWallet = (window as Window & { opnet?: Record<string, unknown> }).opnet!;
-      const [, interactionResult] = await (
-        opnetWallet['signAndBroadcastInteraction'] as (
-          p: Record<string, unknown>,
-        ) => Promise<[unknown, { txid: string }, unknown[]]>
-      )({
-        utxos,
-        from:        wallet.address,
-        to:          tournament.tokenAddress,
-        feeRate:     10,
-        priorityFee: 1000n,
-        gasSatFee:   500n,
-        calldata,
+      if (simulation.revert) {
+        throw new Error(`Transfer simulation failed: ${simulation.revert}`);
+      }
+      console.log('[handlePay] simulation OK, sending transaction…');
+
+      // 4. Send transaction (frontend: signer=null, wallet handles signing)
+      const txResult = await simulation.sendTransaction({
+        signer: null as never,
+        mldsaSigner: null as never,
+        refundTo: wallet.address,
+        maximumAllowedSatToSpend: 50000n,
+        feeRate: 10,
         network,
       });
 
-      const txid = interactionResult.txid;
+      const txid = txResult.transactionId;
       setTxHash(txid);
       console.log('[handlePay] tx broadcast:', txid);
 
