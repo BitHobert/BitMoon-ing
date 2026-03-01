@@ -131,17 +131,21 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
       const network  = rpcNetwork();
       const provider = new JSONRpcProvider({ url: OPNET_RPC, network });
 
+      // 2. Resolve sender (wallet) and prize contract addresses
+      console.log('[handlePay] resolving addresses…');
+      const [senderAddr, prizeAddr] = await Promise.all([
+        provider.getPublicKeyInfo(wallet.address, false),
+        provider.getPublicKeyInfo(tournament.prizeContractAddress, true),
+      ]);
+
       console.log('[handlePay] getting token contract:', tournament.tokenAddress);
       const tokenContract = getContract<IOP20Contract>(
         tournament.tokenAddress,
         OP_20_ABI,
         provider,
         network,
+        senderAddr,
       );
-
-      // 2. Resolve prize contract address
-      console.log('[handlePay] resolving prizeContract:', tournament.prizeContractAddress);
-      const prizeAddr = await provider.getPublicKeyInfo(tournament.prizeContractAddress, true);
       console.log('[handlePay] resolved prize contract address');
 
       // 3. Simulate the OP-20 transfer
