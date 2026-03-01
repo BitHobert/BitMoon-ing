@@ -16,6 +16,7 @@ export interface WalletActions {
   disconnect: () => void;
   signMessage: (message: string) => Promise<string>;
   getPublicKey: () => Promise<string>;
+  sendBitcoin: (toAddress: string, satoshis: number) => Promise<string>;
   detectWallet: () => WalletType;
 }
 
@@ -114,5 +115,19 @@ export function useWallet(): WalletState & WalletActions {
     }
   }, [state.connected, state.type]);
 
-  return { ...state, connect, disconnect, signMessage, getPublicKey, detectWallet };
+  const sendBitcoin = useCallback(async (toAddress: string, satoshis: number): Promise<string> => {
+    if (!state.connected || !state.type) throw new Error('Wallet not connected');
+
+    if (state.type === 'opnet') {
+      const opnet = (window as Window & { opnet?: { sendBitcoin: (to: string, sats: number) => Promise<string> } }).opnet;
+      if (!opnet) throw new Error('OP_WALLET not available');
+      return opnet.sendBitcoin(toAddress, satoshis);
+    } else {
+      const unisat = (window as Window & { unisat?: { sendBitcoin: (to: string, sats: number) => Promise<string> } }).unisat;
+      if (!unisat) throw new Error('Unisat not available');
+      return unisat.sendBitcoin(toAddress, satoshis);
+    }
+  }, [state.connected, state.type]);
+
+  return { ...state, connect, disconnect, signMessage, getPublicKey, sendBitcoin, detectWallet };
 }

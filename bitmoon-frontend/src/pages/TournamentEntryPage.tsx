@@ -4,23 +4,6 @@ import type { TournamentInfo } from '../types';
 import { getTournaments, enterTournament } from '../api/http';
 import { useWalletContext } from '../context/WalletContext';
 import { useAuthContext } from '../context/AuthContext';
-import { getContract, JSONRpcProvider, OP_20_ABI } from 'opnet';
-import type { IOP20Contract } from 'opnet';
-import { MessageSigner } from '@btc-vision/transaction';
-import { networks } from '@btc-vision/bitcoin';
-
-// ─── Config ──────────────────────────────────────────────────────────────────
-
-const OPNET_RPC: string =
-  (import.meta.env['VITE_OPNET_RPC_URL'] as string | undefined) ?? 'https://testnet.opnet.org';
-
-function rpcNetwork() {
-  if (OPNET_RPC.includes('mainnet')) return networks.bitcoin;
-  if (OPNET_RPC.includes('regtest')) return networks.regtest;
-  // OPNet testnet is a Signet fork — MUST use opnetTestnet (bech32: "opt"),
-  // NOT networks.testnet (Bitcoin testnet4, bech32: "tb").
-  return networks.opnetTestnet;
-}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -89,28 +72,14 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
     return token;
   }, [auth, wallet.address, wallet.signMessage, wallet.getPublicKey]);
 
-  // ── Pay entry fee ─────────────────────────────────────────────────────────
+  // ── Pay entry fee (native BTC) ───────────────────────────────────────────
   const handlePay = useCallback(async () => {
-    console.log('[handlePay] start', { tournament: !!tournament, address: wallet.address });
     if (!tournament || !wallet.address) return;
 
-    // Tournament entry requires OP_WALLET (UnisatSigner is FORBIDDEN for OPNet contract calls)
-    if (!MessageSigner.isOPWalletAvailable()) {
-      setErrorMsg(
-        'Tournament entry requires the OP_WALLET browser extension.\n' +
-        'Unisat can be used to connect and play for free, but OP-20 transfers require OP_WALLET.',
-      );
-      setStep('error');
-      return;
-    }
-
-    console.log('[handlePay] calling ensureToken…');
     let token: string | null;
     try {
       token = await ensureToken();
-      console.log('[handlePay] ensureToken returned:', token ? 'OK' : 'NULL');
     } catch (err) {
-      console.error('[handlePay] ensureToken threw:', err);
       setErrorMsg(err instanceof Error ? err.message : 'Auth failed');
       setStep('error');
       return;
@@ -124,55 +93,15 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
 
     setStep('paying');
     setErrorMsg(null);
-    console.log('[handlePay] step=paying, starting OPNet interaction…');
 
     try {
-      // 1. Set up provider and get OP-20 token contract
-      const network  = rpcNetwork();
-      const provider = new JSONRpcProvider({ url: OPNET_RPC, network });
+      // Entry fee is in raw units (satoshis, 8 decimals) — send native BTC
+      const satoshis = Number(BigInt(tournament.entryFee));
+      const txid = await wallet.sendBitcoin(tournament.prizeContractAddress, satoshis);
 
-      // 2. Resolve sender (wallet) and prize contract addresses
-      console.log('[handlePay] resolving addresses…');
-      const [senderAddr, prizeAddr] = await Promise.all([
-        provider.getPublicKeyInfo(wallet.address, false),
-        provider.getPublicKeyInfo(tournament.prizeContractAddress, true),
-      ]);
-
-      console.log('[handlePay] getting token contract:', tournament.tokenAddress);
-      const tokenContract = getContract<IOP20Contract>(
-        tournament.tokenAddress,
-        OP_20_ABI,
-        provider,
-        network,
-        senderAddr,
-      );
-      console.log('[handlePay] resolved prize contract address');
-
-      // 3. Simulate the OP-20 transfer
-      const amount = BigInt(tournament.entryFee);
-      console.log('[handlePay] simulating transfer, amount:', amount.toString());
-      const simulation = await tokenContract.transfer(prizeAddr, amount);
-
-      if (simulation.revert) {
-        throw new Error(`Transfer simulation failed: ${simulation.revert}`);
-      }
-      console.log('[handlePay] simulation OK, sending transaction…');
-
-      // 4. Send transaction (frontend: signer=null, wallet handles signing)
-      const txResult = await simulation.sendTransaction({
-        signer: null as never,
-        mldsaSigner: null as never,
-        refundTo: wallet.address,
-        maximumAllowedSatToSpend: 50000n,
-        feeRate: 10,
-        network,
-      });
-
-      const txid = txResult.transactionId;
       setTxHash(txid);
-      console.log('[handlePay] tx broadcast:', txid);
 
-      // 4. Confirm with backend
+      // Confirm with backend
       setStep('confirming');
       await enterTournament(token, {
         tournamentType: tournament.tournamentType,
@@ -180,7 +109,6 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
       });
 
       setStep('done');
-      console.log('[handlePay] entry confirmed!');
       setTimeout(() => navigate('game', { tournamentType: tournament.tournamentType }), 2500);
 
     } catch (err: unknown) {
@@ -189,7 +117,7 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
       setErrorMsg(msg);
       setStep('error');
     }
-  }, [tournament, wallet.address, ensureToken, navigate]);
+  }, [tournament, wallet, ensureToken, navigate]);
 
   // ── Guards ────────────────────────────────────────────────────────────────
 
@@ -261,16 +189,6 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
               Your score will be eligible for the {tournament.tournamentType} prize pool.
             </div>
 
-            {!MessageSigner.isOPWalletAvailable() && (
-              <div style={{
-                background: 'rgba(231,76,60,0.1)', border: '1px solid var(--color-red)',
-                borderRadius: 3, padding: '8px 12px', marginBottom: 14,
-                fontFamily: 'var(--font-pixel)', fontSize: 7, color: 'var(--color-red)', lineHeight: 2,
-              }}>
-                ⚠ OP_WALLET not detected. Tournament entry requires OP_WALLET extension.
-              </div>
-            )}
-
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn btn-blue" style={{ flex: 1, fontSize: 8 }} onClick={() => navigate('lobby')}>
                 CANCEL
@@ -279,7 +197,6 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
                 className="btn btn-solid-orange"
                 style={{ flex: 2, fontSize: 8 }}
                 onClick={() => void handlePay()}
-                disabled={!MessageSigner.isOPWalletAvailable()}
               >
                 SEND ENTRY FEE →
               </button>
@@ -293,7 +210,7 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
               ⏳ AWAITING WALLET…
             </div>
             <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 7, color: 'var(--color-text-dim)', lineHeight: 2 }}>
-              Approve the transaction in your OP_WALLET extension.
+              Approve the transaction in your wallet extension.
             </div>
           </div>
         )}
