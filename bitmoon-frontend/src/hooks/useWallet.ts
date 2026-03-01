@@ -118,15 +118,11 @@ export function useWallet(): WalletState & WalletActions {
   const sendBitcoin = useCallback(async (toAddress: string, satoshis: number): Promise<string> => {
     if (!state.connected || !state.type) throw new Error('Wallet not connected');
 
-    if (state.type === 'opnet') {
-      const opnet = (window as Window & { opnet?: { sendBitcoin: (to: string, sats: number) => Promise<string> } }).opnet;
-      if (!opnet) throw new Error('OP_WALLET not available');
-      return opnet.sendBitcoin(toAddress, satoshis);
-    } else {
-      const unisat = (window as Window & { unisat?: { sendBitcoin: (to: string, sats: number) => Promise<string> } }).unisat;
-      if (!unisat) throw new Error('Unisat not available');
-      return unisat.sendBitcoin(toAddress, satoshis);
-    }
+    // Both OP_WALLET and Unisat expose sendBitcoin on window.unisat.
+    // OP_WALLET registers itself as a Unisat-compatible provider.
+    const unisat = (window as Window & { unisat?: { sendBitcoin: (to: string, sats: number) => Promise<string> } }).unisat;
+    if (!unisat) throw new Error('No wallet with sendBitcoin available');
+    return unisat.sendBitcoin(toAddress, satoshis);
   }, [state.connected, state.type]);
 
   return { ...state, connect, disconnect, signMessage, getPublicKey, sendBitcoin, detectWallet };
