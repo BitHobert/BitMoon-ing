@@ -5,7 +5,7 @@ import { getTournaments, enterTournament } from '../api/http';
 import { useWalletContext } from '../context/WalletContext';
 import { useAuthContext } from '../context/AuthContext';
 import { JSONRpcProvider } from 'opnet';
-import { Address, BinaryWriter, MessageSigner } from '@btc-vision/transaction';
+import { BinaryWriter, MessageSigner } from '@btc-vision/transaction';
 import { networks } from '@btc-vision/bitcoin';
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -136,11 +136,15 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
       });
       console.log('[handlePay] UTXOs fetched:', utxos?.length ?? 0);
 
-      // 2. Encode OP-20 transfer(prizeContractAddress, entryFee) calldata
-      console.log('[handlePay] encoding calldata, prizeContract:', tournament.prizeContractAddress);
+      // 2. Resolve prize contract bech32 address → Address object via OPNet node
+      console.log('[handlePay] resolving prizeContract:', tournament.prizeContractAddress);
+      const prizeAddr = await provider.getPublicKeyInfo(tournament.prizeContractAddress, true);
+      console.log('[handlePay] resolved prize contract address');
+
+      // 3. Encode OP-20 transfer(prizeContractAddress, entryFee) calldata
       const writer = new BinaryWriter();
       writer.writeSelector(0xa9059cbb);                         // transfer(address,uint256)
-      writer.writeAddress(Address.fromString(tournament.prizeContractAddress));
+      writer.writeAddress(prizeAddr);
       writer.writeU256(BigInt(tournament.entryFee));
       const calldata = writer.getBuffer();
       console.log('[handlePay] calldata encoded, calling signAndBroadcastInteraction…');
