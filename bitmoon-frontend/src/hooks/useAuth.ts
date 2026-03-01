@@ -16,7 +16,7 @@ export interface AuthActions {
     signFn: (msg: string) => Promise<string>,
     getPublicKeyFn: () => Promise<string>,
     tournamentType?: TournamentType,
-  ) => Promise<void>;
+  ) => Promise<string>;
   logout: () => void;
 }
 
@@ -53,6 +53,7 @@ export function useAuth(): AuthState & AuthActions {
       });
       // Token stored in React state only — never written to localStorage
       setState({ token, sessionId, expiresAt, loggingIn: false, error: null });
+      return token;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Auth failed';
       setState((s) => ({ ...s, loggingIn: false, error: message }));
