@@ -286,8 +286,7 @@ export class TournamentService {
                     this.feeConfigs.updateOne(
                         { _id: type },
                         {
-                            $setOnInsert: {
-                                _id:       type,
+                            $set: {
                                 entryFee:  fee.toString(),
                                 updatedAt: Date.now(),
                             },
