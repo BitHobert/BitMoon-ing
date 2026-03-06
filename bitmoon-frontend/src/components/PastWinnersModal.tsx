@@ -6,11 +6,14 @@ const TYPES: TournamentType[] = ['daily', 'weekly', 'monthly'];
 const PLACE_LABELS = ['🥇 1ST', '🥈 2ND', '🥉 3RD'];
 const PLACE_COLORS = ['#ffd700', '#c0c0c0', '#cd7f32'];
 
-function fmt(satoshis: string) {
-  const n = BigInt(satoshis);
-  if (n >= 1_000_000n) return `${(Number(n) / 1_000_000).toFixed(2)} M`;
-  if (n >= 1_000n)     return `${(Number(n) / 1_000).toFixed(0)} K`;
-  return satoshis;
+function fmtTokens(raw: string, decimals = 8): string {
+  const n = BigInt(raw);
+  const divisor = BigInt(10 ** decimals);
+  const whole = n / divisor;
+  const frac  = n % divisor;
+  if (frac === 0n) return whole.toLocaleString();
+  const fracStr = frac.toString().padStart(decimals, '0').replace(/0+$/, '');
+  return `${whole.toLocaleString()}.${fracStr}`;
 }
 
 function shortAddr(addr: string) {
@@ -134,7 +137,7 @@ export function PastWinnersModal({ onClose }: Props) {
               display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap',
             }}>
               <span>ROUND: {data.tournamentKey}</span>
-              <span>PRIZE POOL: {fmt(data.totalPrize)}</span>
+              <span>PRIZE POOL: {fmtTokens(data.totalPrize)} LFGT</span>
               <span>DATE: {new Date(data.distributedAt).toLocaleDateString()}</span>
             </div>
 
@@ -156,19 +159,28 @@ export function PastWinnersModal({ onClose }: Props) {
                   }}>
                     {PLACE_LABELS[w.place - 1]}
                   </span>
-                  <span style={{
-                    fontFamily: 'var(--font-mono)', fontSize: 10,
-                    color: 'var(--color-text)',
-                    flex: 1, textAlign: 'center',
-                  }}>
-                    {shortAddr(w.address)}
-                  </span>
+                  <div style={{ flex: 1, textAlign: 'center' }}>
+                    <div style={{
+                      fontFamily: 'var(--font-mono)', fontSize: 10,
+                      color: 'var(--color-text)',
+                    }}>
+                      {shortAddr(w.address)}
+                    </div>
+                    {w.score != null && (
+                      <div style={{
+                        fontFamily: 'var(--font-pixel)', fontSize: 7,
+                        color: 'var(--color-text-dim)', marginTop: 2,
+                      }}>
+                        SCORE: {w.score.toLocaleString()}
+                      </div>
+                    )}
+                  </div>
                   <span style={{
                     fontFamily: 'var(--font-pixel)', fontSize: 9,
                     color: 'var(--color-orange)',
                     whiteSpace: 'nowrap',
                   }}>
-                    {fmt(w.amount)}
+                    {fmtTokens(w.amount)} LFGT
                   </span>
                 </div>
               ))}

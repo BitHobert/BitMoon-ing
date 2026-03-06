@@ -257,13 +257,18 @@ export class LeaderboardService {
         ]);
     }
 
+    /**
+     * Build a MongoDB filter for free-play leaderboards.
+     * Excludes tournament runs so they don't pollute the free-play board.
+     */
     private periodFilter(period: LeaderboardPeriod): Record<string, unknown> {
+        const noTournament = { tournamentType: { $exists: false } };
         const now = Date.now();
         switch (period) {
-            case 'daily':   return { dayKey:   dayKey(now) };
-            case 'weekly':  return { weekKey:  weekKey(now) };
-            case 'monthly': return { monthKey: monthKey(now) };
-            case 'alltime': return {};
+            case 'daily':   return { dayKey:   dayKey(now), ...noTournament };
+            case 'weekly':  return { weekKey:  weekKey(now), ...noTournament };
+            case 'monthly': return { monthKey: monthKey(now), ...noTournament };
+            case 'alltime': return noTournament;
         }
     }
 
@@ -295,11 +300,12 @@ export class LeaderboardService {
      * Fetch top N entries for a specific tournament period key (e.g. '2026-02-24').
      */
     public async getTournamentLeaderboard(
+        tournamentType: TournamentType,
         tournamentKey: string,
         limit = 100,
     ): Promise<LeaderboardEntry[]> {
         const docs = await this.runs
-            .find({ tournamentKey })
+            .find({ tournamentType, tournamentKey })
             .sort({ score: -1 })
             .limit(limit)
             .toArray();

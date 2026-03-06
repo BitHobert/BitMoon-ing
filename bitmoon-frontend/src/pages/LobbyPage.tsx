@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { NavigateFn } from '../App';
 import { getTournaments, getTournamentLeaderboard } from '../api/http';
 import type { TournamentInfo, TournamentType } from '../types';
@@ -20,11 +20,13 @@ export function LobbyPage({ navigate }: Props) {
   const [showWinners,  setShowWinners]  = useState(false);
   const [playerRanks,  setPlayerRanks]  = useState<Partial<Record<TournamentType, number | null>>>({});
   const [prizePools,   setPrizePools]   = useState<Partial<Record<TournamentType, string>>>({});
+  const [blockHeight,  setBlockHeight]  = useState<string | null>(null);
 
   useEffect(() => {
     getTournaments()
       .then(async (r) => {
         setTournaments(r.tournaments);
+        if (r.currentBlock) setBlockHeight(r.currentBlock);
 
         // Build prize pool map for TournamentLeaderboard payout display
         const pools: Partial<Record<TournamentType, string>> = {};
@@ -51,8 +53,17 @@ export function LobbyPage({ navigate }: Props) {
       .catch(console.error);
   }, [address]); // re-run when wallet connects so rank badge appears immediately
 
-  // Use supply sequenceNumber as rough block proxy for display only
-  const currentBlock = supply ? BigInt(supply.sequenceNumber) : undefined;
+  // Poll block height every 30s so the current block display stays fresh
+  const refreshBlock = useCallback(() => {
+    getTournaments()
+      .then((r) => { if (r.currentBlock) setBlockHeight(r.currentBlock); })
+      .catch(() => { /* silent */ });
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(refreshBlock, 30_000);
+    return () => clearInterval(id);
+  }, [refreshBlock]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--color-bg)' }}>
@@ -104,16 +115,30 @@ export function LobbyPage({ navigate }: Props) {
         {/* Tournament cards */}
         {tournaments.length > 0 && (
           <section>
-            <h2 className="pixel" style={{ fontSize: 10, color: 'var(--color-text-dim)', marginBottom: 12 }}>
-              ACTIVE TOURNAMENTS
-            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              <h2 className="pixel" style={{ fontSize: 10, color: 'var(--color-text-dim)', margin: 0 }}>
+                ACTIVE TOURNAMENTS
+              </h2>
+              {blockHeight && (
+                <div style={{
+                  fontFamily: 'var(--font-pixel)',
+                  fontSize: 9,
+                  color: 'var(--color-text-dim)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}>
+                  <span style={{ color: 'var(--color-green)', fontSize: 8 }}>●</span>
+                  CURRENT BLOCK <span style={{ color: 'var(--color-orange)' }}>{Number(blockHeight).toLocaleString()}</span>
+                </div>
+              )}
+            </div>
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
               {tournaments.map((t) => (
                 <TournamentCard
                   key={t.tournamentType}
                   info={t}
                   navigate={navigate}
-                  currentBlock={currentBlock}
                   playerRank={playerRanks[t.tournamentType]}
                 />
               ))}

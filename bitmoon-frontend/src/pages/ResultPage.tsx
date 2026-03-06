@@ -81,7 +81,9 @@ export function ResultPage({ navigate }: Props) {
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 12 }}>
-        <button className="btn btn-solid-orange" onClick={() => navigate('game', {})}>
+        <button className="btn btn-solid-orange" onClick={() => navigate('game', {
+          tournamentType: result?.tournamentType,
+        })}>
           PLAY AGAIN
         </button>
         <button className="btn btn-blue" onClick={() => navigate('lobby')}>

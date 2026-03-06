@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { WalletConnectProvider } from '@btc-vision/walletconnect';
 import { WalletProvider } from './context/WalletContext';
 import { AuthProvider } from './context/AuthContext';
 import { WsProvider } from './context/WsContext';
@@ -33,18 +34,20 @@ export default function App() {
   };
 
   return (
-    <WalletProvider>
-      <AuthProvider>
-        <WsProvider>
-          {page === 'lobby'            && <LobbyPage navigate={navigate} />}
-          {page === 'game'             && <GamePage  navigate={navigate} ctx={pageCtx} />}
-          {page === 'result'           && <ResultPage navigate={navigate} ctx={pageCtx} />}
-          {page === 'tournament-entry' && <TournamentEntryPage navigate={navigate} ctx={pageCtx} />}
-          {page === 'admin'            && <AdminPage navigate={navigate} />}
-          {page === 'guide'            && <GameGuidePage navigate={navigate} />}
-        </WsProvider>
-      </AuthProvider>
-    </WalletProvider>
+    <WalletConnectProvider theme="dark">
+      <WalletProvider>
+        <AuthProvider>
+          <WsProvider>
+            {page === 'lobby'            && <LobbyPage navigate={navigate} />}
+            {page === 'game'             && <GamePage  navigate={navigate} ctx={pageCtx} />}
+            {page === 'result'           && <ResultPage navigate={navigate} ctx={pageCtx} />}
+            {page === 'tournament-entry' && <TournamentEntryPage navigate={navigate} ctx={pageCtx} />}
+            {page === 'admin'            && <AdminPage navigate={navigate} />}
+            {page === 'guide'            && <GameGuidePage navigate={navigate} />}
+          </WsProvider>
+        </AuthProvider>
+      </WalletProvider>
+    </WalletConnectProvider>
   );
 }
 

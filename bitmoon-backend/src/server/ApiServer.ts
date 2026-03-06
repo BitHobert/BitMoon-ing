@@ -9,6 +9,7 @@ import { GiveawayService } from '../services/GiveawayService.js';
 import { TournamentService } from '../services/TournamentService.js';
 import { PaymentService } from '../services/PaymentService.js';
 import { PrizeDistributorService } from '../services/PrizeDistributorService.js';
+import { OPNetService } from '../services/OPNetService.js';
 import type {
     GameEvent,
     LeaderboardPeriod,
@@ -30,6 +31,7 @@ type Res = HyperExpress.Response;
  *  GET  /v1/supply                        — current game supply + scarcity multiplier
  *  GET  /v1/nonce/:address                — get a sign challenge for OP_WALLET
  *  POST /v1/session/start                 — auth + create session (optional tournamentType)
+ *  POST /v1/session/game                  — create game session from existing auth token
  *  POST /v1/session/end                   — submit score
  *  GET  /v1/leaderboard/:period           — score leaderboard (daily/weekly/monthly/alltime)
  *  GET  /v1/leaderboard/:period/burn      — burn leaderboard
@@ -127,6 +129,10 @@ export class ApiServer {
 
         this.app.post('/v1/session/start', async (req, res) => {
             await this.handleSessionStart(req, res);
+        });
+
+        this.app.post('/v1/session/game', async (req, res) => {
+            await this.handleCreateGameSession(req, res);
         });
 
         this.app.post('/v1/session/end', async (req, res) => {
@@ -249,6 +255,43 @@ export class ApiServer {
         }
     }
 
+    /**
+     * Create a fresh game session from an existing auth token.
+     * No wallet re-signing needed — the Bearer token proves identity.
+     * Body: { tournamentType?: TournamentType }
+     */
+    private async handleCreateGameSession(req: Req, res: Res): Promise<void> {
+        const playerAddress = this.extractTokenSubject(req);
+        if (!playerAddress) {
+            res.status(401).json({ error: 'Missing or invalid Authorization header' });
+            return;
+        }
+
+        let body: { tournamentType?: TournamentType };
+        try { body = await req.json() as typeof body; }
+        catch { body = {}; }
+
+        const { tournamentType } = body;
+
+        try {
+            const session = await this.sessions.createSession(playerAddress, tournamentType);
+            const token   = this.auth.issueSessionToken(playerAddress, session.sessionId);
+
+            if (Config.DEV_MODE) {
+                console.log('[ApiServer] Game session created:', {
+                    sessionId: session.sessionId,
+                    playerAddress,
+                    tournamentType: tournamentType ?? 'none',
+                });
+            }
+
+            res.json({ sessionId: session.sessionId, token, expiresAt: session.expiresAt });
+        } catch (err: unknown) {
+            const statusCode = (err as { statusCode?: number }).statusCode ?? 400;
+            res.status(statusCode).json({ error: (err as Error).message });
+        }
+    }
+
     private async handleSessionEnd(req: Req, res: Res): Promise<void> {
         const playerAddress = this.extractTokenSubject(req);
         if (!playerAddress) {
@@ -264,6 +307,17 @@ export class ApiServer {
         if (!sessionId || !events || clientScore === undefined || !clientBurned) {
             res.status(400).json({ error: 'Missing required fields' });
             return;
+        }
+
+        if (Config.DEV_MODE) {
+            const activeCount = (this.sessions as any).sessions?.size ?? '?';
+            console.log('[ApiServer] endSession request:', {
+                sessionId,
+                playerAddress,
+                eventsCount: events.length,
+                clientScore,
+                activeSessions: activeCount,
+            });
         }
 
         const endReq: SessionEndRequest = {
@@ -344,7 +398,10 @@ export class ApiServer {
             }),
         );
 
-        res.json({ tournaments: enriched });
+        // Include the current OPNet block so the frontend can display countdown
+        const provider     = OPNetService.getInstance().getProvider();
+        const currentBlock = await provider.getBlockNumber();
+        res.json({ tournaments: enriched, currentBlock: currentBlock.toString() });
     }
 
     private async handleTournamentLeaderboard(req: Req, res: Res): Promise<void> {
@@ -356,7 +413,7 @@ export class ApiServer {
         try {
             const key   = await this.tournament.getTournamentKey(type);
             const limit = Math.min(parseInt(String(req.query_parameters?.['limit'] ?? '100'), 10), 500);
-            const entries = await this.leaderboard.getTournamentLeaderboard(key, limit);
+            const entries = await this.leaderboard.getTournamentLeaderboard(type, key, limit);
             res.json({ tournamentType: type, tournamentKey: key, entries });
         } catch (err: unknown) {
             const statusCode = (err as { statusCode?: number }).statusCode ?? 500;
@@ -395,12 +452,9 @@ export class ApiServer {
             return;
         }
 
-        // Reject duplicate — already has a verified entry
-        const alreadyIn = await this.tournament.hasEntry(playerAddress, tournamentType, key);
-        if (alreadyIn) {
-            res.status(409).json({ error: 'Player already has a verified entry for this tournament period' });
-            return;
-        }
+        // Allow re-entry — player can pay again to top up the prize pool.
+        // The game session gate (hasEntry check in createSession) ensures they
+        // can play as many times as they want once they have at least one entry.
 
         // Verify on-chain payment
         const verification = await this.payment.verifyPayment(txHash, playerAddress, tournamentType);
@@ -442,10 +496,17 @@ export class ApiServer {
                     : `Entry pending — waiting for ${Config.MIN_PAYMENT_CONFIRMATIONS} confirmation(s).`,
             });
         } catch (err: unknown) {
-            // MongoDB duplicate key (code 11000) = same txHash submitted twice
+            // MongoDB duplicate key (code 11000) = same txHash or same player/period
+            // Treat as success — the player is already entered, let them play.
             const code = (err as { code?: number }).code;
             if (code === 11000) {
-                res.status(409).json({ error: 'This transaction has already been used for an entry' });
+                res.json({
+                    success:       true,
+                    entry:         { tournamentType, tournamentKey: key },
+                    confirmations: verification.confirmations,
+                    isVerified:    verification.valid,
+                    message:       'Entry already recorded — you can start playing.',
+                });
             } else {
                 throw err;
             }

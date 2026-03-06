@@ -13,7 +13,7 @@ export function LeaderboardTable() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getLeaderboard('alltime', 10);
+      const res = await getLeaderboard('alltime', 100);
       setEntries(res.entries);
     } catch { setEntries([]); }
     finally { setLoading(false); }

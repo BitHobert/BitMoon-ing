@@ -39,7 +39,7 @@ export function TournamentLeaderboard({ prizePools }: Props) {
   const load = useCallback(async (t: TournamentType) => {
     setLoading(true);
     try {
-      const res = await getTournamentLeaderboard(t, 10);
+      const res = await getTournamentLeaderboard(t, 20);
       setEntries(res.entries);
     } catch { setEntries([]); }
     finally  { setLoading(false); }
@@ -105,7 +105,7 @@ export function TournamentLeaderboard({ prizePools }: Props) {
         <span>🥇 {fmtTokens(prizes[0])}</span>
         <span>🥈 {fmtTokens(prizes[1])}</span>
         <span>🥉 {fmtTokens(prizes[2])}</span>
-        <span style={{ marginLeft: 'auto', color }}>tBTC</span>
+        <span style={{ marginLeft: 'auto', color }}>LFGT</span>
       </div>
 
       {/* Leaderboard table */}

@@ -31,6 +31,8 @@ export interface GameEvent {
     readonly type: GameEventType;
     /** Enemy tier involved (for kill/hit events) */
     readonly tier?: TierNumber;
+    /** Actual points awarded (for kill events — handles bosses vs regular enemies) */
+    readonly points?: number;
     /** Power-up type collected */
     readonly powerupType?: string;
     /** Wave number when event occurred */
@@ -215,9 +217,11 @@ export interface TournamentInfo {
     readonly tokenAddress: string;
     /** Address of the on-chain PrizeDistributor contract holding the prize pools */
     readonly prizeContractAddress: string;
-    /** Sum of verified 80 % prize contributions for this period (as string) */
+    /** Total prize pool = 80 % contributions + carryover from previous period (as string) */
     readonly prizePool: string;
-    /** Sum of verified 15 % next-pool contributions (as string) */
+    /** 15 % carryover from the previous period included in prizePool (as string) */
+    readonly carryover: string;
+    /** Sum of verified 15 % next-pool contributions for this period (as string) */
     readonly nextPool: string;
     readonly entrantCount: number;
     /** Block number when this period began (as string) */
@@ -245,6 +249,7 @@ export interface PrizeDistribution {
         readonly place: 1 | 2 | 3;
         readonly address: string;
         readonly amount: string;            // token units as string
+        readonly score: number;             // player's tournament score
     }>;
     /** Total prize distributed (mainPool + activeCarry), as string */
     readonly totalPrize: string;

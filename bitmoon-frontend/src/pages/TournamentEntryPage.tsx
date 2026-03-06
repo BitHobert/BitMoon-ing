@@ -23,7 +23,7 @@ function shortAddr(addr: string) {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type Step = 'review' | 'paying' | 'confirming' | 'done' | 'error';
+type Step = 'review' | 'minting' | 'paying' | 'confirming' | 'done' | 'error';
 
 const TYPE_COLORS: Record<string, string> = {
   daily:   'var(--color-blue)',
@@ -72,7 +72,7 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
     return token;
   }, [auth, wallet.address, wallet.signMessage, wallet.getPublicKey]);
 
-  // ── Pay entry fee (native BTC) ───────────────────────────────────────────
+  // ── Pay entry fee ──────────────────────────────────────────────────────────
   const handlePay = useCallback(async () => {
     if (!tournament || !wallet.address) return;
 
@@ -95,9 +95,21 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
     setErrorMsg(null);
 
     try {
-      // Entry fee is in raw units (satoshis, 8 decimals) — send native BTC
-      const satoshis = Number(BigInt(tournament.entryFee));
-      const txid = await wallet.sendBitcoin(tournament.prizeContractAddress, satoshis);
+      let txid: string;
+
+      if (tournament.tokenAddress) {
+        // OP-20 token transfer (LFGT or other token)
+        const amount = BigInt(tournament.entryFee);
+        txid = await wallet.sendTokenTransfer(
+          tournament.tokenAddress,
+          tournament.prizeContractAddress,
+          amount,
+        );
+      } else {
+        // Native BTC fallback (for when opnet.web3.sendBitcoin is fixed)
+        const satoshis = Number(BigInt(tournament.entryFee));
+        txid = await wallet.sendBitcoin(tournament.prizeContractAddress, satoshis);
+      }
 
       setTxHash(txid);
 
@@ -141,9 +153,10 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
     );
   }
 
-  const color     = TYPE_COLORS[tournament.tournamentType] ?? 'var(--color-orange)';
-  const feeTokens = fmtTokens(tournament.entryFee);
-  const prizePool = fmtTokens(tournament.prizePool);
+  const color      = TYPE_COLORS[tournament.tournamentType] ?? 'var(--color-orange)';
+  const feeTokens  = fmtTokens(tournament.entryFee);
+  const prizePool  = fmtTokens(tournament.prizePool);
+  const tokenLabel = tournament.tokenAddress ? 'LFGT' : 'tBTC';
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -171,8 +184,8 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
 
         {/* Details grid */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 8px', marginBottom: 20 }}>
-          <Detail label="PRIZE POOL"  value={`${prizePool} tBTC`}  color="var(--color-orange)" />
-          <Detail label="ENTRY FEE"   value={`${feeTokens} tBTC`}  color={color} />
+          <Detail label="PRIZE POOL"  value={`${prizePool} ${tokenLabel}`}  color="var(--color-orange)" />
+          <Detail label="ENTRY FEE"   value={`${feeTokens} ${tokenLabel}`}  color={color} />
           <Detail label="PLAYERS"     value={String(tournament.entrantCount)} color="var(--color-text)" />
           <Detail label="YOUR WALLET" value={shortAddr(wallet.address ?? '')} color="var(--color-text-dim)" />
         </div>
@@ -185,7 +198,7 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
               borderRadius: 3, padding: '10px 14px', marginBottom: 18,
               fontFamily: 'var(--font-pixel)', fontSize: 8, color: 'var(--color-text-dim)', lineHeight: 2,
             }}>
-              Sending entry fee transfers <strong style={{ color: 'var(--color-orange)' }}>{feeTokens} tBTC</strong> to the prize contract.
+              Sending entry fee transfers <strong style={{ color: 'var(--color-orange)' }}>{feeTokens} {tokenLabel}</strong> to the prize contract.
               Your score will be eligible for the {tournament.tournamentType} prize pool.
             </div>
 
@@ -201,7 +214,19 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
                 SEND ENTRY FEE →
               </button>
             </div>
+
           </>
+        )}
+
+        {step === 'minting' && (
+          <div style={{ textAlign: 'center', padding: '16px 0' }}>
+            <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 9, color: 'var(--color-blue)', marginBottom: 10 }}>
+              🪙 MINTING LFGT…
+            </div>
+            <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 7, color: 'var(--color-text-dim)', lineHeight: 2 }}>
+              Approve the mint transaction in your wallet.
+            </div>
+          </div>
         )}
 
         {step === 'paying' && (
@@ -210,7 +235,8 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
               ⏳ AWAITING WALLET…
             </div>
             <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 7, color: 'var(--color-text-dim)', lineHeight: 2 }}>
-              Approve the transaction in your wallet extension.
+              Wallet is preparing your transaction.<br/>
+              Please wait for it to load, then sign.
             </div>
           </div>
         )}

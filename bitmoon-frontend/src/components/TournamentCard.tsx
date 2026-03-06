@@ -26,19 +26,16 @@ function formatTokens(raw: string, decimals = 8): string {
 interface Props {
   info: TournamentInfo;
   navigate: NavigateFn;
-  currentBlock?: bigint;
   /** Connected player's rank in this tournament, if entered. */
   playerRank?: number | null;
 }
 
-export function TournamentCard({ info, navigate, currentBlock, playerRank }: Props) {
+export function TournamentCard({ info, navigate, playerRank }: Props) {
   const color        = TYPE_COLORS[info.tournamentType];
   const prizeDisplay = formatTokens(info.prizePool);
   const feeDisplay   = formatTokens(info.entryFee);
 
-  const blocksLeft = currentBlock !== undefined
-    ? Math.max(0, Number(BigInt(info.endsAtBlock) - currentBlock))
-    : null;
+  const endBlock = info.endsAtBlock;
 
   // Prize split: 1st 70 % · 2nd 20 % · 3rd 10 %
   const pool   = BigInt(info.prizePool);
@@ -59,10 +56,10 @@ export function TournamentCard({ info, navigate, currentBlock, playerRank }: Pro
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span className="pixel" style={{ fontSize: 11, color }}>{TYPE_LABELS[info.tournamentType]}</span>
-        <span style={{ marginLeft: 'auto' }}>
+        <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-pixel)', fontSize: 9 }}>
           {info.isActive
-            ? <span style={{ fontSize: 9, color: 'var(--color-green)', fontFamily: 'var(--font-pixel)' }}>● LIVE</span>
-            : <span style={{ fontSize: 9, color: 'var(--color-text-dim)', fontFamily: 'var(--font-pixel)' }}>INACTIVE</span>
+            ? <span style={{ color: 'var(--color-green)' }}>● LIVE</span>
+            : <span style={{ color: '#ffd700' }}>🏆 DISTRIBUTING</span>
           }
         </span>
         {playerRank != null && (
@@ -86,7 +83,7 @@ export function TournamentCard({ info, navigate, currentBlock, playerRank }: Pro
         <div className="pixel" style={{ fontSize: 15, color: 'var(--color-orange)' }}>
           {prizeDisplay}
         </div>
-        <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginTop: 2 }}>tBTC</div>
+        <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginTop: 2 }}>LFGT</div>
         {info.sponsorBonuses && info.sponsorBonuses.length > 0 && (() => {
           // Group bonuses by token symbol and show each separately
           const bySymbol = new Map<string, bigint>();
@@ -125,12 +122,16 @@ export function TournamentCard({ info, navigate, currentBlock, playerRank }: Pro
           <div style={{ color: 'var(--color-text)', marginBottom: 2 }}>{feeDisplay}</div>
           <div>ENTRY FEE</div>
         </div>
-        {blocksLeft !== null && (
+        {BigInt(info.carryover || '0') > 0n && (
           <div>
-            <div style={{ color: 'var(--color-text)', marginBottom: 2 }}>{blocksLeft}</div>
-            <div>BLOCKS LEFT</div>
+            <div style={{ color: 'var(--color-green)', marginBottom: 2 }}>+{formatTokens(info.carryover)}</div>
+            <div>CARRYOVER</div>
           </div>
         )}
+        <div>
+          <div style={{ color: 'var(--color-text)', marginBottom: 2 }}>{Number(endBlock).toLocaleString()}</div>
+          <div>END BLOCK</div>
+        </div>
       </div>
 
       {/* Prize breakdown */}
@@ -148,14 +149,28 @@ export function TournamentCard({ info, navigate, currentBlock, playerRank }: Pro
         <span>🥉 {prize3}</span>
       </div>
 
+      {/* Next round notice when in gap */}
+      {!info.isActive && (
+        <div style={{
+          textAlign: 'center',
+          fontFamily: 'var(--font-pixel)',
+          fontSize: 8,
+          color: '#ffd700',
+          padding: '6px 0',
+        }}>
+          NEXT ROUND AT BLOCK {Number(info.nextStartBlock).toLocaleString()}
+        </div>
+      )}
+
       {/* Enter button */}
       <div style={{ marginTop: 'auto' }}>
         <button
           className="btn btn-solid-orange"
-          style={{ width: '100%', fontSize: 8 }}
+          style={{ width: '100%', fontSize: 8, opacity: info.isActive ? 1 : 0.4 }}
           onClick={() => navigate('tournament-entry', { tournamentType: info.tournamentType })}
+          disabled={!info.isActive}
         >
-          ENTER
+          {info.isActive ? 'ENTER' : 'WAITING…'}
         </button>
       </div>
     </div>

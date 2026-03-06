@@ -40,59 +40,57 @@ export class ScoreSimulator {
         }
 
         // ── Replay state ────────────────────────────────────────────────────
+        // IMPORTANT: This must exactly mirror the client-side GameEngine scoring.
+        // Uses event.points (sent by client) for kill values — this correctly
+        // handles both regular enemies (basePoints) and bosses (boss-specific points).
         let score = 0;
         let kills = 0;
         let wavesCleared = 0;
         let totalBurned = 0n;
-        let reflectionKillCounter = 0;
         let lastTick = -1;
-        const activeWaveClearBonus = { active: false, expiresAtTick: 0 };
+        let gameOver = false;
 
         for (const event of events) {
-            // Enforce monotonic tick ordering
-            if (event.tick <= lastTick) {
+            if (gameOver) break;
+
+            // Enforce monotonic tick ordering (same tick is OK — multiple events per frame)
+            if (event.tick < lastTick) {
                 return ScoreSimulator.reject(sessionId, playerAddress, 'Non-monotonic tick sequence detected');
             }
             lastTick = event.tick;
-
-            const waveMult = activeWaveClearBonus.active && event.tick <= activeWaveClearBonus.expiresAtTick
-                ? 5.0
-                : 1.0;
 
             switch (event.type) {
                 case 'kill': {
                     if (!event.tier) break;
                     const tier = event.tier as TierNumber;
                     const config = getTierConfig(tier);
-                    const points = Math.floor(config.basePoints * waveMult);
-                    score += points;
+                    // Use client-reported points if available (handles bosses),
+                    // otherwise fall back to tier basePoints for backwards compat
+                    score += event.points ?? config.basePoints;
                     kills++;
-                    reflectionKillCounter++;
                     totalBurned += config.burnPerKill;
-
-                    // Reflection: every 25 kills grant a passive bonus
-                    if (reflectionKillCounter >= 25) {
-                        reflectionKillCounter = 0;
-                        const reflectionBonus = Math.floor(score * 0.01);
-                        score += reflectionBonus;
-                    }
                     break;
                 }
 
                 case 'wave_clear': {
                     wavesCleared++;
-                    // Bonus: 5x multiplier for next 600 ticks (~10 seconds at 60 fps)
-                    activeWaveClearBonus.active = true;
-                    activeWaveClearBonus.expiresAtTick = event.tick + 600;
                     break;
                 }
 
                 case 'player_death':
-                    // Game over — stop processing events
+                    // Game over — stop processing any remaining events
+                    gameOver = true;
                     break;
 
+                case 'miss': {
+                    // Planet destroyed — apply penalty if provided
+                    if (event.points && event.points < 0) {
+                        score = Math.max(0, score + event.points); // points is negative
+                    }
+                    break;
+                }
+
                 case 'hit':
-                case 'miss':
                 case 'powerup':
                     // No score impact from these — they inform client state only
                     break;

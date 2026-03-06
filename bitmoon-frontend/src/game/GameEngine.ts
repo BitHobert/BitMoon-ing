@@ -72,6 +72,8 @@ export class GameEngine {
   // ── Public API ───────────────────────────────────────────────────────────────
 
   public start(): void {
+    // Reset all key states — prevents stuck keys from previous game instances
+    for (const k of Object.keys(KEYS)) (KEYS as Record<string, boolean>)[k] = false;
     window.addEventListener('keydown', this.boundKeyDown);
     window.addEventListener('keyup',   this.boundKeyUp);
     this.beginWave(1);
@@ -82,6 +84,8 @@ export class GameEngine {
     if (this.rafId !== null) { cancelAnimationFrame(this.rafId); this.rafId = null; }
     window.removeEventListener('keydown', this.boundKeyDown);
     window.removeEventListener('keyup',   this.boundKeyUp);
+    // Clear key states on stop as well
+    for (const k of Object.keys(KEYS)) (KEYS as Record<string, boolean>)[k] = false;
   }
 
   public getEvents():       GameEvent[]        { return [...this.events]; }
@@ -398,7 +402,7 @@ export class GameEngine {
           s.burned += e.cfg.burnUnits;
           this.spawnExplosion(e.x, e.y, TIER_COLORS[e.tier]);
           this.audio?.playEnemyKill();
-          this.events.push({ tick: s.tick, type: 'kill', tier: e.tier, wave: s.wave });
+          this.events.push({ tick: s.tick, type: 'kill', tier: e.tier, points: pts, wave: s.wave });
           this.cbs.onScore(s.score);
           this.cbs.onKill(e.tier, pts);
           this.tryDropPowerup(e.x, e.y);
@@ -429,7 +433,7 @@ export class GameEngine {
             this.spawnExplosion(s.boss.x + 25, s.boss.y - 25, '#ffd700');
             this.spawnExplosion(s.boss.x - 25, s.boss.y + 25, '#ff4500');
             this.audio?.playBossKill();
-            this.events.push({ tick: s.tick, type: 'kill', tier: 5, wave: s.wave });
+            this.events.push({ tick: s.tick, type: 'kill', tier: 5, points: pts, wave: s.wave });
             this.cbs.onScore(s.score);
             this.cbs.onKill(5, pts);
           }
@@ -587,7 +591,7 @@ export class GameEngine {
           s.burned += e.cfg.burnUnits;
           this.spawnExplosion(e.x, e.y, TIER_COLORS[e.tier]);
           this.audio?.playEnemyKill();
-          this.events.push({ tick: s.tick, type: 'kill', tier: e.tier, wave: s.wave });
+          this.events.push({ tick: s.tick, type: 'kill', tier: e.tier, points: pts, wave: s.wave });
           this.cbs.onScore(s.score);
           this.cbs.onKill(e.tier, pts);
           // Chance to drop a powerup
@@ -624,7 +628,7 @@ export class GameEngine {
           this.spawnExplosion(s.boss.x + 25, s.boss.y - 25, '#ffd700');
           this.spawnExplosion(s.boss.x - 25, s.boss.y + 25, '#ff4500');
           this.audio?.playBossKill();
-          this.events.push({ tick: s.tick, type: 'kill', tier: 5, wave: s.wave });
+          this.events.push({ tick: s.tick, type: 'kill', tier: 5, points: pts, wave: s.wave });
           this.cbs.onScore(s.score);
           this.cbs.onKill(5, pts);
         }
@@ -694,7 +698,7 @@ export class GameEngine {
             this.spawnExplosion(s.moon.x, s.moon.y, '#ffd700');
             this.spawnExplosion(s.moon.x, s.moon.y, '#ff4500');
             this.audio?.playPlanetDestroyed();
-            this.events.push({ tick: s.tick, type: 'miss', wave: s.wave });
+            this.events.push({ tick: s.tick, type: 'miss', wave: s.wave, points: -(s.moon.penalty) });
             this.cbs.onScore(s.score);
           }
           e.alive = false;
@@ -772,12 +776,16 @@ export class GameEngine {
     s.player.invincibleFrames = PLAYER_INVINCIBLE;
     this.spawnExplosion(s.player.x, s.player.y, '#f7931a');
     this.audio?.playPlayerHit();
-    this.events.push({ tick: s.tick, type: 'player_death', wave: s.wave });
     this.cbs.onLives(s.player.lives);
     if (s.player.lives <= 0) {
+      // Only push player_death when the player actually dies (no lives left)
+      this.events.push({ tick: s.tick, type: 'player_death', wave: s.wave });
       s.phase = 'game_over';
       this.cbs.onGameOver(s.score, s.burned);
       this.audio?.playGameOver();
+    } else {
+      // Non-fatal hit — push 'hit' event (server ignores these for scoring)
+      this.events.push({ tick: s.tick, type: 'hit', wave: s.wave });
     }
   }
 

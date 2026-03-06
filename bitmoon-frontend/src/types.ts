@@ -12,6 +12,7 @@ export interface GameEvent {
   readonly tick: number;
   readonly type: GameEventType;
   readonly tier?: TierNumber;
+  readonly points?: number;       // actual points awarded (for kill events)
   readonly powerupType?: string;
   readonly wave: number;
 }
@@ -34,6 +35,7 @@ export interface TournamentInfo {
   readonly tokenAddress: string;
   readonly prizeContractAddress: string;
   readonly prizePool: string;
+  readonly carryover: string;
   readonly nextPool: string;
   readonly entrantCount: number;
   readonly startsAtBlock: string;
@@ -53,6 +55,7 @@ export interface PrizeDistribution {
     readonly place: 1 | 2 | 3;
     readonly address: string;
     readonly amount: string;
+    readonly score: number;
   }>;
   readonly totalPrize: string;
   readonly distributedAt: number;

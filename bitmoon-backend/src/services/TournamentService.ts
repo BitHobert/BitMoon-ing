@@ -118,6 +118,26 @@ export class TournamentService {
     }
 
     /**
+     * Returns the previous period's tournament key for a given type and current period key.
+     * The previous period started one `cycle` before the current period.
+     * Returns null if the current period is the very first one (at genesis).
+     */
+    public getPreviousPeriodKey(type: TournamentType, currentPeriodKey: string): string | null {
+        const currentStart = BigInt(currentPeriodKey);
+        const genesis      = Config.TOURNAMENT_GENESIS_BLOCK;
+        const { cycle }    = TournamentService.durationFor(type);
+
+        // If current start is at or before genesis, there is no previous period
+        if (currentStart <= genesis) return null;
+
+        const prevStart = currentStart - cycle;
+        // Guard against underflow — shouldn't happen with properly aligned keys
+        if (prevStart < genesis) return null;
+
+        return prevStart.toString();
+    }
+
+    /**
      * Fetch the current block from OPNet and compute the tournament period.
      */
     public async getCurrentPeriod(type: TournamentType): Promise<TournamentPeriod> {
@@ -217,18 +237,25 @@ export class TournamentService {
             types.map(async (type) => {
                 const period = this.computePeriod(type, currentBlock);
                 const config = await this.getFeeConfig(type);
-                const [prizePool, nextPool, count] = await Promise.all([
+
+                // 15% carryover from the PREVIOUS period adds to this period's prize pool
+                const prevKey = this.getPreviousPeriodKey(type, period.tournamentKey);
+                const [currentPool, carryover, nextPool, count] = await Promise.all([
                     this.getPrizePool(type, period.tournamentKey),
+                    prevKey ? this.getNextPool(type, prevKey) : Promise.resolve(0n),
                     this.getNextPool(type, period.tournamentKey),
                     this.getEntryCount(type, period.tournamentKey),
                 ]);
+                const totalPrize = currentPool + carryover;
+
                 return {
                     tournamentType:  type,
                     tournamentKey:   period.tournamentKey,
                     entryFee:        config.entryFee,
                     tokenAddress:         Config.ENTRY_TOKEN_ADDRESS,
                     prizeContractAddress: Config.PRIZE_CONTRACT_ADDRESS,
-                    prizePool:       prizePool.toString(),
+                    prizePool:       totalPrize.toString(),
+                    carryover:       carryover.toString(),
                     nextPool:        nextPool.toString(),
                     entrantCount:    count,
                     startsAtBlock:   period.startsAtBlock.toString(),
@@ -298,13 +325,19 @@ export class TournamentService {
     }
 
     private async ensureIndexes(): Promise<void> {
+        // Drop legacy unique indexes that are now too restrictive.
+        // Players can re-enter (multiple payments add to pool), and
+        // the same txHash dup is handled gracefully by the API layer.
+        for (const name of ['unique_player_per_tournament_period', 'paymentTxHash_1']) {
+            try { await this.entries.dropIndex(name); } catch { /* index may not exist */ }
+        }
+
         const entryIndexes: IndexDescription[] = [
-            {
-                key: { playerAddress: 1, tournamentType: 1, tournamentKey: 1 },
-                unique: true,
-                name: 'unique_player_per_tournament_period',
-            },
-            { key: { paymentTxHash: 1 }, unique: true },
+            // Non-unique: lookup by player+period (multiple entries allowed)
+            { key: { playerAddress: 1, tournamentType: 1, tournamentKey: 1 } },
+            // Non-unique: lookup by txHash (dups handled in API layer)
+            { key: { paymentTxHash: 1 } },
+            // Leaderboard queries
             { key: { isVerified: 1, tournamentType: 1, tournamentKey: 1 } },
         ];
         await this.entries.createIndexes(entryIndexes);

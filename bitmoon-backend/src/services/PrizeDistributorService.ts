@@ -263,17 +263,21 @@ export class PrizeDistributorService {
         console.log(`[PrizeDistributorService] Distributing prizes for ${type}/${periodKey}`);
 
         const top3 = await LeaderboardService.getInstance().getTop3ForTournament(type, periodKey);
-        const zero  = Address.dead();
 
-        // Player addresses in MongoDB are bech32 (opt1p...) — resolve to MLDSA key hashes.
-        // Address.fromString() rejects bech32; getPublicKeyInfo() performs the lookup.
-        const w1: Address = top3[0] ? await this.resolveAddress(top3[0].playerAddress) : zero;
-        const w2: Address = top3[1] ? await this.resolveAddress(top3[1].playerAddress) : zero;
-        const w3: Address = top3[2] ? await this.resolveAddress(top3[2].playerAddress) : zero;
+        if (top3.length === 0) {
+            console.log(`[PrizeDistributorService] No players for ${type}/${periodKey} — skipping`);
+        }
 
+        // On-chain distribution (only if prize contract is configured)
         let txid = '';
         if (this.isContractReady()) {
             try {
+                const zero  = Address.dead();
+                // Player addresses in MongoDB are bech32 (opt1p...) — resolve to MLDSA key hashes.
+                const w1: Address = top3[0] ? await this.resolveAddress(top3[0].playerAddress) : zero;
+                const w2: Address = top3[1] ? await this.resolveAddress(top3[1].playerAddress) : zero;
+                const w3: Address = top3[2] ? await this.resolveAddress(top3[2].playerAddress) : zero;
+
                 const contract = this.getContract();
                 const call = await contract.distributePrize(
                     this.typeIndex(type),
@@ -284,33 +288,35 @@ export class PrizeDistributorService {
                 txid = result.transactionId;
                 console.log(`[PrizeDistributorService] distributePrize tx: ${txid}`);
             } catch (err) {
-                console.error('[PrizeDistributorService] distributePrize failed:', err);
-                return; // Don't record — will retry next watcher cycle
+                console.error('[PrizeDistributorService] on-chain distributePrize failed (will still record locally):', err);
+                // Continue — still record the distribution in MongoDB
             }
         }
 
         // Compute prize amounts from the on-chain pool (use backend DB as approximation)
+        // Total prize = 80% from THIS period + 15% carryover from the PREVIOUS period
         const ts = TournamentService.getInstance();
         const currentMainPool  = await ts.getPrizePool(type, periodKey);
-        const previousNextPool = await ts.getNextPool(type, periodKey);
-        const totalPrize       = currentMainPool + previousNextPool;
+        const prevKey          = ts.getPreviousPeriodKey(type, periodKey);
+        const carryoverPool    = prevKey ? await ts.getNextPool(type, prevKey) : 0n;
+        const totalPrize       = currentMainPool + carryoverPool;
 
-        const winners: Array<{ place: 1|2|3; address: string; amount: string }> = [];
+        const winners: Array<{ place: 1|2|3; address: string; amount: string; score: number }> = [];
         if (top3[0]) {
             const p1 = top3.length === 1 ? totalPrize
                      : top3.length === 2 ? (totalPrize * 80n / 100n)
                      : (totalPrize * 70n / 100n);
-            winners.push({ place: 1, address: top3[0].playerAddress, amount: p1.toString() });
+            winners.push({ place: 1, address: top3[0].playerAddress, amount: p1.toString(), score: top3[0].score });
         }
         if (top3[1]) {
             const p2 = top3.length === 2
                 ? (totalPrize - totalPrize * 80n / 100n)
                 : (totalPrize * 20n / 100n);
-            winners.push({ place: 2, address: top3[1].playerAddress, amount: p2.toString() });
+            winners.push({ place: 2, address: top3[1].playerAddress, amount: p2.toString(), score: top3[1].score });
         }
         if (top3[2]) {
             const p3 = totalPrize - (totalPrize * 70n / 100n) - (totalPrize * 20n / 100n);
-            winners.push({ place: 3, address: top3[2].playerAddress, amount: p3.toString() });
+            winners.push({ place: 3, address: top3[2].playerAddress, amount: p3.toString(), score: top3[2].score });
         }
 
         // ── BTC Prize Distribution ────────────────────────────────────────────

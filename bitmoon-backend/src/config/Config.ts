@@ -138,18 +138,19 @@ export const Config = {
      */
     TOURNAMENT_GENESIS_BLOCK: BigInt(process.env['TOURNAMENT_GENESIS_BLOCK'] ?? '0'),
 
-    /** Active blocks per daily tournament. */
-    DAILY_ACTIVE_BLOCKS:   100n,
-    /** Active blocks per weekly tournament. */
-    WEEKLY_ACTIVE_BLOCKS:  200n,
-    /** Active blocks per monthly tournament. */
-    MONTHLY_ACTIVE_BLOCKS: 3920n,
+    /** Active blocks per daily tournament (TEST MODE: 6 blocks ≈ 1 hr). */
+    DAILY_ACTIVE_BLOCKS:   6n,
+    /** Active blocks per weekly tournament (TEST MODE: 15 blocks ≈ 2.5 hr). */
+    WEEKLY_ACTIVE_BLOCKS:  15n,
+    /** Active blocks per monthly tournament (TEST MODE: 30 blocks ≈ 5 hr). */
+    MONTHLY_ACTIVE_BLOCKS: 30n,
 
     /**
      * Gap between end of one tournament and start of the next (in blocks).
      * Prize is sent at endBlock+1; next tournament begins at endBlock+GAP+1.
+     * TEST MODE: 2 blocks (~20 min) — enough for watcher to poll & distribute.
      */
-    TOURNAMENT_GAP_BLOCKS: 4n,
+    TOURNAMENT_GAP_BLOCKS: 2n,
 
     // ── Fee split ratios (basis points, total = 10 000) ───────────────────────
     /** 5 % → developer wallet */

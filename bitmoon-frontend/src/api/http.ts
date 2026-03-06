@@ -59,6 +59,17 @@ export function startSession(body: SessionStartRequest): Promise<SessionStartRes
   return request('/v1/session/start', { method: 'POST', body: JSON.stringify(body) });
 }
 
+export function createGameSession(
+  token: string,
+  tournamentType?: TournamentType,
+): Promise<SessionStartResponse> {
+  return request('/v1/session/game', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ tournamentType }),
+  });
+}
+
 export function endSession(token: string, body: SessionEndRequest): Promise<ScoreResult> {
   return request('/v1/session/end', {
     method: 'POST',
@@ -78,7 +89,7 @@ export function getPlayer(address: string): Promise<PlayerStats> {
   return request(`/v1/player/${encodeURIComponent(address)}`);
 }
 
-export function getTournaments(): Promise<{ tournaments: TournamentInfo[] }> {
+export function getTournaments(): Promise<{ tournaments: TournamentInfo[]; currentBlock: string }> {
   return request('/v1/tournaments');
 }
 

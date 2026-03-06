@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { NavigateFn, PageContext } from '../App';
 import type { GameEvent, TierNumber } from '../types';
-import { endSession } from '../api/http';
+import { createGameSession, endSession } from '../api/http';
 import { useWalletContext } from '../context/WalletContext';
 import { useAuthContext } from '../context/AuthContext';
 import { GameCanvas } from '../components/GameCanvas';
@@ -30,30 +30,36 @@ export function GamePage({ navigate, ctx }: Props) {
     setShieldCount(sc);
   }, []);
 
-  // Session is created in useEffect; token may come from auth context or be created fresh
+  // Game session refs — set during mount, read when game ends
   const sessionIdRef = useRef<string | null>(null);
   const tokenRef     = useRef<string | null>(null);
 
-  // Create a game session on mount
+  // Create a FRESH game session on mount.
+  // Uses the existing auth token from TournamentEntryPage to create a new
+  // session on the backend (no re-signing needed). This ensures the session
+  // is alive and has the correct tournamentType context.
   useEffect(() => {
     async function initSession() {
       try {
-        // If wallet connected, use existing auth token (or login first)
-        if (wallet.connected && wallet.address) {
-          let token = auth.token;
-          if (!token) {
-            await auth.login(wallet.address, wallet.signMessage, wallet.getPublicKey, ctx.tournamentType);
-            token = auth.token;
-          }
+        if (wallet.connected && wallet.address && auth.token) {
+          // Create a fresh game session from the existing auth token
+          const resp = await createGameSession(auth.token, ctx.tournamentType);
+          sessionIdRef.current = resp.sessionId;
+          tokenRef.current = resp.token;
+          console.log('[GamePage] Game session created:', resp.sessionId);
+        } else if (wallet.connected && wallet.address) {
+          // No auth token yet — login first (non-tournament / first visit)
+          const token = await auth.login(
+            wallet.address, wallet.signMessage, wallet.getPublicKey, ctx.tournamentType,
+          );
           if (token && auth.sessionId) {
             sessionIdRef.current = auth.sessionId;
             tokenRef.current = token;
           }
         }
-        // Guest play (no wallet): skip session — game runs locally, score not saved
+        // No wallet: guest play — game runs locally, score not saved
       } catch (err) {
-        // Session creation failed — log but don't block the game (free play still works)
-        console.warn('Session init failed (game will run in guest mode):', err);
+        console.warn('[GamePage] Session init failed (guest mode):', err);
       } finally {
         setLoading(false);
       }
