@@ -61,14 +61,15 @@ export class PaymentService {
         txHash: string,
         _playerAddress: string,
         tournamentType: TournamentType,
+        quantity = 1,
     ): Promise<PaymentVerificationResult> {
         // ── DEV_MODE bypass ─────────────────────────────────────────────────
         if (Config.DEV_MODE) {
             const feeConfig  = await TournamentService.getInstance().getFeeConfig(tournamentType);
-            const fakeAmount = BigInt(feeConfig.entryFee);
+            const fakeAmount = BigInt(feeConfig.entryFee) * BigInt(quantity);
             const { devAmount, nextPoolAmount, prizeAmount } =
                 TournamentService.getInstance().computeSplit(fakeAmount);
-            console.warn(`[PaymentService] DEV_MODE — auto-approving payment ${txHash}`);
+            console.warn(`[PaymentService] DEV_MODE — auto-approving payment ${txHash} (qty=${quantity})`);
             return {
                 valid:          true,
                 confirmations:  999,
@@ -81,9 +82,9 @@ export class PaymentService {
 
         // Route to the appropriate verification method
         if (!Config.ENTRY_TOKEN_ADDRESS) {
-            return this.verifyNativeBtcPayment(txHash, tournamentType);
+            return this.verifyNativeBtcPayment(txHash, tournamentType, quantity);
         }
-        return this.verifyOp20Payment(txHash, tournamentType);
+        return this.verifyOp20Payment(txHash, tournamentType, quantity);
     }
 
     // ── Native BTC verification ─────────────────────────────────────────────
@@ -97,13 +98,14 @@ export class PaymentService {
     private async verifyNativeBtcPayment(
         txHash: string,
         tournamentType: TournamentType,
+        quantity = 1,
     ): Promise<PaymentVerificationResult> {
         if (!Config.PRIZE_CONTRACT_ADDRESS) {
             return invalid('Server payment address is not configured');
         }
 
         const feeConfig     = await TournamentService.getInstance().getFeeConfig(tournamentType);
-        const expectedTotal = BigInt(feeConfig.entryFee);
+        const expectedTotal = BigInt(feeConfig.entryFee) * BigInt(quantity);
         const provider      = OPNetService.getInstance().getProvider();
 
         // Check transaction exists on-chain
@@ -155,13 +157,14 @@ export class PaymentService {
     private async verifyOp20Payment(
         txHash: string,
         tournamentType: TournamentType,
+        quantity = 1,
     ): Promise<PaymentVerificationResult> {
         if (!Config.PRIZE_CONTRACT_ADDRESS) {
             return invalid('Server prize contract address is not configured');
         }
 
         const feeConfig     = await TournamentService.getInstance().getFeeConfig(tournamentType);
-        const expectedTotal = BigInt(feeConfig.entryFee);
+        const expectedTotal = BigInt(feeConfig.entryFee) * BigInt(quantity);
         const provider      = OPNetService.getInstance().getProvider();
 
         // The transaction may not be indexed yet (just broadcast, still in mempool).

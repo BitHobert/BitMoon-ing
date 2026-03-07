@@ -473,7 +473,7 @@ export class ApiServer {
 
         // Allow re-entry — each payment purchases N turns (quantity × fee).
         // Verify on-chain payment
-        const verification = await this.payment.verifyPayment(txHash, playerAddress, tournamentType);
+        const verification = await this.payment.verifyPayment(txHash, playerAddress, tournamentType, quantity);
 
         if (verification.amountPaid === 0n && verification.confirmations === 0) {
             res.status(400).json({ error: verification.reason ?? 'Payment verification failed' });
