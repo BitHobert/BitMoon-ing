@@ -102,8 +102,9 @@ export function getTournamentLeaderboard(
 
 export function getTournamentWinners(
   type: TournamentType,
-): Promise<{ tournamentType: string; distribution: PrizeDistribution | null }> {
-  return request(`/v1/tournament/${type}/winners`);
+  limit = 10,
+): Promise<{ tournamentType: string; distributions: PrizeDistribution[]; distribution: PrizeDistribution | null }> {
+  return request(`/v1/tournament/${type}/winners?limit=${limit}`);
 }
 
 // ── Authenticated routes ──────────────────────────────────────────────────────

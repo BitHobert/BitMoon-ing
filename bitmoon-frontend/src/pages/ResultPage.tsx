@@ -5,13 +5,11 @@ import { useAuthContext } from '../context/AuthContext';
 
 interface Props { navigate: NavigateFn; ctx: PageContext; }
 
-export function ResultPage({ navigate }: Props) {
+export function ResultPage({ navigate, ctx }: Props) {
   const auth = useAuthContext();
-  // The score result is stored in auth context after session end; read from sessionStorage if needed
   const [result, setResult] = useState<ScoreResult | null>(null);
 
   useEffect(() => {
-    // Check sessionStorage for cached result (set by GamePage after endSession)
     const cached = sessionStorage.getItem('lastScoreResult');
     if (cached) {
       try { setResult(JSON.parse(cached) as ScoreResult); } catch { /* ignore */ }
@@ -19,10 +17,11 @@ export function ResultPage({ navigate }: Props) {
     }
   }, []);
 
-  // If no result (guest play or network error), show a minimal screen
   const score  = result?.validatedScore ?? 0;
   const kills  = result?.kills          ?? 0;
   const waves  = result?.wavesCleared   ?? 0;
+  const turnsRemaining = result?.turnsRemaining ?? 0;
+  const tournamentType = result?.tournamentType ?? ctx.tournamentType;
 
   return (
     <div style={{
@@ -68,24 +67,43 @@ export function ResultPage({ navigate }: Props) {
         </div>
 
         {/* Tournament info */}
-        {result?.tournamentType && (
+        {tournamentType && (
           <div style={{
             textAlign: 'center', padding: '8px 0',
             borderTop: '1px solid var(--color-border)',
             fontFamily: 'var(--font-pixel)', fontSize: 9, color: '#b975ff',
           }}>
-            {result.tournamentType.toUpperCase()} TOURNAMENT ENTRY RECORDED
+            {tournamentType.toUpperCase()} TOURNAMENT ENTRY RECORDED
           </div>
         )}
       </div>
 
       {/* Actions */}
-      <div style={{ display: 'flex', gap: 12 }}>
-        <button className="btn btn-solid-orange" onClick={() => navigate('game', {
-          tournamentType: result?.tournamentType,
-        })}>
-          PLAY AGAIN
-        </button>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+        {/* Turn-aware buttons for tournament players */}
+        {tournamentType && turnsRemaining > 0 && (
+          <button className="btn btn-solid-orange" onClick={() => navigate('game', {
+            tournamentType,
+          })}>
+            PLAY NEXT TURN ({turnsRemaining} LEFT)
+          </button>
+        )}
+
+        {tournamentType && turnsRemaining <= 0 && (
+          <button className="btn btn-solid-orange" onClick={() => navigate('tournament-entry', {
+            tournamentType,
+          })}>
+            BUY MORE TURNS
+          </button>
+        )}
+
+        {/* Non-tournament guest play */}
+        {!tournamentType && (
+          <button className="btn btn-solid-orange" onClick={() => navigate('lobby')}>
+            BACK TO LOBBY
+          </button>
+        )}
+
         <button className="btn btn-blue" onClick={() => navigate('lobby')}>
           LEADERBOARD
         </button>

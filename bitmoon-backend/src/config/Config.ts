@@ -116,9 +116,12 @@ export const Config = {
     /** Minimum on-chain confirmations before a payment is considered verified */
     MIN_PAYMENT_CONFIRMATIONS: parseInt(process.env['MIN_PAYMENT_CONFIRMATIONS'] ?? '1', 10),
 
-    // ── Native BTC Prize Distribution ─────────────────────────────────────────
+    // ── Prize Distribution ────────────────────────────────────────────────────
 
-    /** Enable BTC prize payouts from the operator wallet to tournament winners */
+    /** Enable OP-20 token prize payouts from the operator wallet to tournament winners */
+    TOKEN_PRIZE_ENABLED: process.env['TOKEN_PRIZE_ENABLED'] === 'true',
+
+    /** Enable native BTC prize payouts from the operator wallet to tournament winners */
     BTC_PRIZE_ENABLED: process.env['BTC_PRIZE_ENABLED'] === 'true',
 
     /** BTC prize for 1st place (in satoshis). Default: 50,000 sats (0.0005 BTC) */

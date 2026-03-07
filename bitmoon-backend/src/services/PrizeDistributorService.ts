@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Collection, Db } from 'mongodb';
 import { Address, OPNetLimitedProvider, TransactionFactory, Wallet } from '@btc-vision/transaction';
 import type { UTXO } from '@btc-vision/transaction';
-import { getContract, type OPNetEvent, type TransactionParameters } from 'opnet';
+import { getContract, type IOP20Contract, OP_20_ABI, type OPNetEvent, type TransactionParameters } from 'opnet';
 import { Config } from '../config/Config.js';
 import { OPNetService } from './OPNetService.js';
 import { TournamentService } from './TournamentService.js';
@@ -62,6 +62,19 @@ export class PrizeDistributorService {
             // wallet.address is already an Address object (MLDSA public key hash);
             // Address.fromString() rejects bech32 addresses, so never pass wallet.p2tr.
             this.operatorAddress = this.wallet.address;
+        }
+
+        // One-time cleanup: remove distributions with 0 winners (from bug where
+        // empty periods consumed carryover instead of rolling it forward).
+        // This lets computeCarryover() walk past these periods and recover the tokens.
+        const cleaned = await this.distributions.deleteMany({
+            $or: [
+                { winners: { $size: 0 } },
+                { winners: { $exists: false } },
+            ],
+        });
+        if (cleaned.deletedCount > 0) {
+            console.log(`[PrizeDistributorService] Cleaned up ${cleaned.deletedCount} empty distribution records (carryover recovered)`);
         }
 
         console.log('[PrizeDistributorService] Connected');
@@ -140,6 +153,15 @@ export class PrizeDistributorService {
     }
 
     /**
+     * Returns the most recent N distributions for a tournament type, newest first.
+     */
+    public async getRecentDistributions(type: TournamentType, limit = 10): Promise<PrizeDistribution[]> {
+        return this.distributions
+            .find({ tournamentType: type }, { sort: { distributedAt: -1 }, limit })
+            .toArray();
+    }
+
+    /**
      * Records a sponsor bonus on-chain by calling depositBonus() on the PrizeDistributor contract.
      *
      * The caller is responsible for verifying that `amount` of `tokenAddress` tokens have already
@@ -155,34 +177,52 @@ export class PrizeDistributorService {
         tokenSymbol: string,
         amount: bigint,
     ): Promise<SponsorBonus> {
-        if (!this.isContractReady()) {
-            throw new Error('PrizeDistributorService: contract not configured');
+        let txid = '';
+        let slotIndex = 0;
+
+        // If on-chain PrizeDistributor contract is deployed, call depositBonus() on-chain.
+        // Otherwise, record the bonus in the database only (off-chain mode for testing).
+        if (this.isContractReady()) {
+            try {
+                const periodKeyBigInt = BigInt(periodKey);
+                const typeIndex       = this.typeIndex(tournamentType);
+                // tokenAddress may be bech32 (opt1s...) or hex (0x...); resolve accordingly.
+                const tokenAddr       = tokenAddress.startsWith('0x')
+                    ? Address.fromString(tokenAddress)
+                    : await this.resolveAddress(tokenAddress, true);
+
+                const contract = this.getContract();
+                const call = await contract.depositBonus(typeIndex, periodKeyBigInt, tokenAddr, amount);
+                const txResult = await call.sendTransaction(this.txParams());
+                txid = txResult.transactionId;
+
+                console.log(
+                    `[PrizeDistributorService] depositBonus tx sent for ${tournamentType}/${periodKey}:`,
+                    txid,
+                );
+
+                // Extract slotIndex from the emitted SponsorBonusDeposited event.
+                const events: OPNetEvent<SponsorBonusDepositedEventData>[] = call.events ?? [];
+                const depositEvent = events.find(e => e.type === 'SponsorBonusDeposited');
+                slotIndex = depositEvent?.properties.slotIndex ?? 0;
+            } catch (err) {
+                console.warn(
+                    `[PrizeDistributorService] On-chain depositBonus failed (recording off-chain):`,
+                    (err as Error).message,
+                );
+                // Fall through to DB-only recording
+            }
+        } else {
+            console.log(`[PrizeDistributorService] No contract configured — recording sponsor bonus off-chain only`);
         }
 
-        const typeIndex       = this.typeIndex(tournamentType);
-        const periodKeyBigInt = BigInt(periodKey);
-        // tokenAddress may be bech32 (opt1s...) or hex (0x...); resolve accordingly.
-        // Token addresses are P2OP contracts, so isContract=true.
-        const tokenAddr       = tokenAddress.startsWith('0x')
-            ? Address.fromString(tokenAddress)
-            : await this.resolveAddress(tokenAddress, true);
-
-        const contract = this.getContract();
-        const call = await contract.depositBonus(typeIndex, periodKeyBigInt, tokenAddr, amount);
-        const txResult = await call.sendTransaction(this.txParams());
-        const txid = txResult.transactionId;
-
-        console.log(
-            `[PrizeDistributorService] depositBonus tx sent for ${tournamentType}/${periodKey}:`,
-            txid,
-        );
-
-        // Extract slotIndex from the emitted SponsorBonusDeposited event.
-        // Simulation events are on call.events (CallResult<T,U>.events: U).
-        // OPNetEvent<T>.type is the event name; OPNetEvent<T>.properties is the decoded payload.
-        const events: OPNetEvent<SponsorBonusDepositedEventData>[] = call.events ?? [];
-        const depositEvent = events.find(e => e.type === 'SponsorBonusDeposited');
-        const slotIndex: number = depositEvent?.properties.slotIndex ?? 0;
+        // Assign slotIndex from existing bonus count if on-chain didn't provide one
+        if (slotIndex === 0) {
+            const existing = await this.sponsorBonuses.countDocuments({
+                tournamentType, tournamentKey: periodKey,
+            });
+            slotIndex = existing;
+        }
 
         const doc: SponsorBonus = {
             _id:            randomUUID(),
@@ -192,7 +232,7 @@ export class PrizeDistributorService {
             tokenSymbol,
             amount:         amount.toString(),
             slotIndex,
-            txHash:         txid,
+            txHash:         txid || 'off-chain',
             depositedAt:    Date.now(),
         };
 
@@ -265,7 +305,8 @@ export class PrizeDistributorService {
         const top3 = await LeaderboardService.getInstance().getTop3ForTournament(type, periodKey);
 
         if (top3.length === 0) {
-            console.log(`[PrizeDistributorService] No players for ${type}/${periodKey} — skipping`);
+            console.log(`[PrizeDistributorService] No players for ${type}/${periodKey} — carryover will roll forward to next period`);
+            return; // Don't record a distribution — carryover accumulates for the next period
         }
 
         // On-chain distribution (only if prize contract is configured)
@@ -294,11 +335,10 @@ export class PrizeDistributorService {
         }
 
         // Compute prize amounts from the on-chain pool (use backend DB as approximation)
-        // Total prize = 80% from THIS period + 15% carryover from the PREVIOUS period
+        // Total prize = 80% from THIS period + accumulated 15% carryover from previous periods
         const ts = TournamentService.getInstance();
         const currentMainPool  = await ts.getPrizePool(type, periodKey);
-        const prevKey          = ts.getPreviousPeriodKey(type, periodKey);
-        const carryoverPool    = prevKey ? await ts.getNextPool(type, prevKey) : 0n;
+        const carryoverPool    = await ts.computeCarryover(type, periodKey);
         const totalPrize       = currentMainPool + carryoverPool;
 
         const winners: Array<{ place: 1|2|3; address: string; amount: string; score: number }> = [];
@@ -329,7 +369,19 @@ export class PrizeDistributorService {
                 btcTxIds.push(...txIds);
             } catch (err) {
                 console.error('[PrizeDistributorService] BTC prize distribution failed:', err);
-                // Don't block the rest — OP-20 distribution was already recorded
+            }
+        }
+
+        // ── OP-20 Token Prize Distribution ────────────────────────────────────
+        // Send LFGT tokens from operator wallet to each winner.
+        // Prize amounts are the DB-tracked pool shares (already in raw token units).
+        const tokenTxIds: string[] = [];
+        if (Config.TOKEN_PRIZE_ENABLED && winners.length > 0) {
+            try {
+                const txIds = await this.sendTokenPrizes(type, winners);
+                tokenTxIds.push(...txIds);
+            } catch (err) {
+                console.error('[PrizeDistributorService] Token prize distribution failed:', err);
             }
         }
 
@@ -337,12 +389,13 @@ export class PrizeDistributorService {
             _id:            randomUUID(),
             tournamentType: type,
             tournamentKey:  periodKey,
-            txHash:         txid || btcTxIds[0] || '',
+            txHash:         txid || btcTxIds[0] || tokenTxIds[0] || '',
             winners,
             totalPrize:     totalPrize.toString(),
             distributedAt:  Date.now(),
             blockNumber:    prizeBlock.toString(),
             btcTxIds,
+            tokenTxIds,
         };
 
         try {
@@ -424,6 +477,80 @@ export class PrizeDistributorService {
                     `[PrizeDistributorService] BTC transfer failed for ${type} #${winner.place} → ${winner.address}:`,
                     err,
                 );
+            }
+        }
+
+        return txIds;
+    }
+
+    // ── OP-20 Token Prize Distribution ────────────────────────────────────────
+
+    /**
+     * Send OP-20 tokens (LFGT) to each winner from the operator wallet.
+     * Uses the same token contract as entry fees (Config.ENTRY_TOKEN_ADDRESS).
+     *
+     * Each winner receives their calculated share of the totalPrize pool.
+     * Transfers are sequential to avoid nonce/UTXO conflicts.
+     * One failed transfer does NOT block subsequent transfers.
+     *
+     * Returns an array of transaction IDs (one per successful transfer).
+     */
+    private async sendTokenPrizes(
+        type: TournamentType,
+        winners: Array<{ place: 1 | 2 | 3; address: string; amount: string }>,
+    ): Promise<string[]> {
+        if (!Config.ENTRY_TOKEN_ADDRESS) {
+            console.warn('[PrizeDistributorService] No ENTRY_TOKEN_ADDRESS — skipping token prizes');
+            return [];
+        }
+
+        const provider = OPNetService.getInstance().getProvider();
+        const txIds: string[] = [];
+
+        // Build the OP-20 contract instance for the entry token (LFGT).
+        // ENTRY_TOKEN_ADDRESS is hex (0x...) so Address.fromString() is correct here.
+        const tokenContract = getContract<IOP20Contract>(
+            Address.fromString(Config.ENTRY_TOKEN_ADDRESS),
+            OP_20_ABI,
+            provider,
+            Config.NETWORK,
+            this.operatorAddress,
+        );
+
+        for (const winner of winners) {
+            const prizeAmount = BigInt(winner.amount);
+            if (prizeAmount <= 0n) continue;
+
+            try {
+                // Resolve the winner's bech32 address (opt1p...) to an Address object.
+                // NEVER use Address.fromString() for bech32 — it only accepts hex.
+                const recipientAddress = await this.resolveAddress(winner.address);
+
+                // Simulate the OP-20 transfer
+                const sim = await tokenContract.transfer(recipientAddress, prizeAmount);
+
+                // Check for revert (use .revert per OPNet convention, NOT 'error' in sim)
+                if (sim.revert) {
+                    console.error(
+                        `[PrizeDistributorService] Token transfer reverted for ${type} #${winner.place} → ${winner.address}: ${sim.revert}`,
+                    );
+                    continue;
+                }
+
+                // Send the transaction with real backend signing keys
+                const receipt = await sim.sendTransaction(this.txParams());
+                const txId = receipt.transactionId;
+                txIds.push(txId);
+
+                console.log(
+                    `[PrizeDistributorService] Token prize sent: ${type} #${winner.place} → ${winner.address} (${prizeAmount} raw units) tx: ${txId}`,
+                );
+            } catch (err) {
+                console.error(
+                    `[PrizeDistributorService] Token transfer failed for ${type} #${winner.place} → ${winner.address}:`,
+                    err,
+                );
+                // Continue to next winner — one failure should not block others
             }
         }
 

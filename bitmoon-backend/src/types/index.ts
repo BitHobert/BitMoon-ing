@@ -205,6 +205,10 @@ export interface TournamentEntry {
     readonly confirmations: number;
     /** True once payment has MIN_PAYMENT_CONFIRMATIONS on-chain */
     readonly isVerified: boolean;
+    /** Number of game turns purchased in this entry (default 1) */
+    readonly turnsTotal: number;
+    /** Number of game turns still available (starts at turnsTotal, decremented each game) */
+    readonly turnsRemaining: number;
 }
 
 export interface TournamentInfo {
@@ -258,6 +262,8 @@ export interface PrizeDistribution {
     readonly blockNumber: string;
     /** Native BTC transfer transaction IDs (one per winner, when BTC prizes enabled) */
     readonly btcTxIds?: string[];
+    /** OP-20 token transfer transaction IDs (one per winner, when token prizes enabled) */
+    readonly tokenTxIds?: string[];
 }
 
 // ─── Sponsor Bonus ────────────────────────────────────────────────────────────

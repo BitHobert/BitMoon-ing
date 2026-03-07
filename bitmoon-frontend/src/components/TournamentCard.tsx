@@ -33,6 +33,9 @@ interface Props {
 export function TournamentCard({ info, navigate, playerRank }: Props) {
   const color        = TYPE_COLORS[info.tournamentType];
   const prizeDisplay = formatTokens(info.prizePool);
+  const carryoverAmt = BigInt(info.carryover || '0');
+  const basePool     = BigInt(info.prizePool) - carryoverAmt;
+  const baseDisplay  = formatTokens(basePool.toString());
   const feeDisplay   = formatTokens(info.entryFee);
 
   const endBlock = info.endsAtBlock;
@@ -80,8 +83,15 @@ export function TournamentCard({ info, navigate, playerRank }: Props) {
       {/* Prize pool */}
       <div>
         <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginBottom: 4, fontFamily: 'var(--font-pixel)' }}>PRIZE POOL</div>
-        <div className="pixel" style={{ fontSize: 15, color: 'var(--color-orange)' }}>
-          {prizeDisplay}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+          <span className="pixel" style={{ fontSize: 15, color: 'var(--color-orange)' }}>
+            {carryoverAmt > 0n ? baseDisplay : prizeDisplay}
+          </span>
+          {BigInt(info.carryover || '0') > 0n && (
+            <span style={{ fontSize: 9, fontFamily: 'var(--font-pixel)', color: 'var(--color-green)' }}>
+              +{formatTokens(info.carryover)} carryover
+            </span>
+          )}
         </div>
         <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginTop: 2 }}>LFGT</div>
         {info.sponsorBonuses && info.sponsorBonuses.length > 0 && (() => {
@@ -112,25 +122,13 @@ export function TournamentCard({ info, navigate, playerRank }: Props) {
         })()}
       </div>
 
-      {/* Stats row */}
-      <div style={{ display: 'flex', gap: 16, fontSize: 9, color: 'var(--color-text-dim)', fontFamily: 'var(--font-pixel)' }}>
-        <div>
-          <div style={{ color: 'var(--color-text)', marginBottom: 2 }}>{info.entrantCount}</div>
-          <div>PLAYERS</div>
+      {/* Stats: Players & Entry Fee on one line */}
+      <div style={{ fontSize: 9, fontFamily: 'var(--font-pixel)', color: 'var(--color-text-dim)' }}>
+        <div style={{ marginBottom: 4 }}>
+          <span style={{ color: 'var(--color-text)' }}>{info.entrantCount}</span> PLAYERS · <span style={{ color: 'var(--color-text)' }}>{feeDisplay}</span> LFGT ENTRY FEE
         </div>
         <div>
-          <div style={{ color: 'var(--color-text)', marginBottom: 2 }}>{feeDisplay}</div>
-          <div>ENTRY FEE</div>
-        </div>
-        {BigInt(info.carryover || '0') > 0n && (
-          <div>
-            <div style={{ color: 'var(--color-green)', marginBottom: 2 }}>+{formatTokens(info.carryover)}</div>
-            <div>CARRYOVER</div>
-          </div>
-        )}
-        <div>
-          <div style={{ color: 'var(--color-text)', marginBottom: 2 }}>{Number(endBlock).toLocaleString()}</div>
-          <div>END BLOCK</div>
+          TOURNAMENT END BLOCK <span style={{ color: 'var(--color-text)' }}>{Number(endBlock).toLocaleString()}</span>
         </div>
       </div>
 

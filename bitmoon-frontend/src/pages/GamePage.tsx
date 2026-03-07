@@ -31,14 +31,23 @@ export function GamePage({ navigate, ctx }: Props) {
   }, []);
 
   // Game session refs — set during mount, read when game ends
-  const sessionIdRef = useRef<string | null>(null);
-  const tokenRef     = useRef<string | null>(null);
+  const sessionIdRef       = useRef<string | null>(null);
+  const tokenRef           = useRef<string | null>(null);
+  const turnsRemainingRef  = useRef<number | undefined>(undefined);
+
+  // Guard against React 18 StrictMode double-mount.
+  // Without this, createGameSession is called twice in dev mode,
+  // consuming 2 turns per game instead of 1.
+  const initCalledRef = useRef(false);
 
   // Create a FRESH game session on mount.
   // Uses the existing auth token from TournamentEntryPage to create a new
   // session on the backend (no re-signing needed). This ensures the session
   // is alive and has the correct tournamentType context.
   useEffect(() => {
+    if (initCalledRef.current) return;
+    initCalledRef.current = true;
+
     async function initSession() {
       try {
         if (wallet.connected && wallet.address && auth.token) {
@@ -46,7 +55,8 @@ export function GamePage({ navigate, ctx }: Props) {
           const resp = await createGameSession(auth.token, ctx.tournamentType);
           sessionIdRef.current = resp.sessionId;
           tokenRef.current = resp.token;
-          console.log('[GamePage] Game session created:', resp.sessionId);
+          turnsRemainingRef.current = resp.turnsRemaining;
+          console.log('[GamePage] Game session created:', resp.sessionId, 'turnsRemaining:', resp.turnsRemaining);
         } else if (wallet.connected && wallet.address) {
           // No auth token yet — login first (non-tournament / first visit)
           const token = await auth.login(
@@ -58,8 +68,14 @@ export function GamePage({ navigate, ctx }: Props) {
           }
         }
         // No wallet: guest play — game runs locally, score not saved
-      } catch (err) {
-        console.warn('[GamePage] Session init failed (guest mode):', err);
+      } catch (err: unknown) {
+        console.warn('[GamePage] Session init failed:', err);
+        // If this was a tournament session and it failed (e.g. no turns remaining),
+        // redirect to entry page instead of silently falling into guest mode.
+        if (ctx.tournamentType) {
+          navigate('tournament-entry', { tournamentType: ctx.tournamentType });
+          return;
+        }
       } finally {
         setLoading(false);
       }
@@ -83,8 +99,10 @@ export function GamePage({ navigate, ctx }: Props) {
         kills,
         wavesCleared,
         totalBurned: burned.toString(),
+        tournamentType: ctx.tournamentType,
+        turnsRemaining: 0,
       }));
-      navigate('result', { resultSessionId: undefined });
+      navigate('result', { resultSessionId: undefined, tournamentType: ctx.tournamentType });
       return;
     }
     try {
@@ -94,6 +112,7 @@ export function GamePage({ navigate, ctx }: Props) {
         clientScore: finalScore,
         clientBurned: burned.toString(),
       });
+      // Backend response includes turnsRemaining and tournamentType
       sessionStorage.setItem('lastScoreResult', JSON.stringify(result));
     } catch (err) {
       console.error('endSession failed:', err);
@@ -104,9 +123,13 @@ export function GamePage({ navigate, ctx }: Props) {
         kills,
         wavesCleared,
         totalBurned: burned.toString(),
+        tournamentType: ctx.tournamentType,
+        turnsRemaining: turnsRemainingRef.current != null
+          ? Math.max(0, turnsRemainingRef.current - 1)
+          : 0,
       }));
     }
-    navigate('result', { resultSessionId: sessionId });
+    navigate('result', { resultSessionId: sessionId, tournamentType: ctx.tournamentType });
   }, [navigate]);
 
   const handleKill = useCallback((_tier: TierNumber, _pts: number) => {

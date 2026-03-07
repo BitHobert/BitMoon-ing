@@ -93,6 +93,7 @@ export interface ScoreResult {
   readonly rejectionReason?: string;
   readonly tournamentType?: TournamentType;
   readonly tournamentKey?: string;
+  readonly turnsRemaining?: number;
 }
 
 export interface KillFeedEntry {
@@ -122,6 +123,7 @@ export interface SessionStartResponse {
   readonly sessionId: string;
   readonly token: string;
   readonly expiresAt: number;
+  readonly turnsRemaining?: number;
 }
 
 export interface SessionEndRequest {
@@ -134,6 +136,7 @@ export interface SessionEndRequest {
 export interface TournamentEnterRequest {
   readonly tournamentType: TournamentType;
   readonly txHash: string;
+  readonly quantity?: number;
 }
 
 export interface TournamentEnterResponse {
@@ -145,6 +148,7 @@ export interface TournamentEnterResponse {
   };
   readonly confirmations: number;
   readonly isVerified: boolean;
+  readonly turnsTotal?: number;
   readonly message: string;
 }
 

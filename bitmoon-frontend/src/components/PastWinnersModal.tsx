@@ -26,19 +26,25 @@ interface Props {
 
 export function PastWinnersModal({ onClose }: Props) {
   const [tab,    setTab]    = useState<TournamentType>('daily');
-  const [data,   setData]   = useState<PrizeDistribution | null>(null);
+  const [list,   setList]   = useState<PrizeDistribution[]>([]);
+  const [idx,    setIdx]    = useState(0);
   const [loading, setLoading] = useState(false);
   const [error,  setError]  = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
-    setData(null);
+    setList([]);
+    setIdx(0);
     setError(null);
-    getTournamentWinners(tab)
-      .then((r) => setData(r.distribution))
+    getTournamentWinners(tab, 10)
+      .then((r) => setList(r.distributions ?? (r.distribution ? [r.distribution] : [])))
       .catch(() => setError('Could not load winners'))
       .finally(() => setLoading(false));
   }, [tab]);
+
+  const data = list[idx] ?? null;
+  const hasPrev = idx > 0;
+  const hasNext = idx < list.length - 1;
 
   return (
     /* Backdrop */
@@ -118,7 +124,7 @@ export function PastWinnersModal({ onClose }: Props) {
           </div>
         )}
 
-        {!loading && !error && !data && (
+        {!loading && !error && list.length === 0 && (
           <div style={{ textAlign: 'center', padding: '24px 0', fontFamily: 'var(--font-pixel)', fontSize: 8, color: 'var(--color-text-dim)' }}>
             NO COMPLETED TOURNAMENTS YET
           </div>
@@ -126,6 +132,45 @@ export function PastWinnersModal({ onClose }: Props) {
 
         {!loading && data && (
           <>
+            {/* Navigation — ◀ ROUND X of Y ▶ */}
+            {list.length > 1 && (
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                gap: 12, marginBottom: 12,
+                fontFamily: 'var(--font-pixel)', fontSize: 8,
+              }}>
+                <button
+                  onClick={() => setIdx(i => i - 1)}
+                  disabled={!hasPrev}
+                  style={{
+                    background: 'none', border: 'none', cursor: hasPrev ? 'pointer' : 'default',
+                    fontFamily: 'var(--font-pixel)', fontSize: 10,
+                    color: hasPrev ? 'var(--color-orange)' : 'var(--color-text-dim)',
+                    opacity: hasPrev ? 1 : 0.3,
+                    padding: '4px 8px',
+                  }}
+                >
+                  ◀ NEWER
+                </button>
+                <span style={{ color: 'var(--color-text-dim)' }}>
+                  {idx + 1} / {list.length}
+                </span>
+                <button
+                  onClick={() => setIdx(i => i + 1)}
+                  disabled={!hasNext}
+                  style={{
+                    background: 'none', border: 'none', cursor: hasNext ? 'pointer' : 'default',
+                    fontFamily: 'var(--font-pixel)', fontSize: 10,
+                    color: hasNext ? 'var(--color-orange)' : 'var(--color-text-dim)',
+                    opacity: hasNext ? 1 : 0.3,
+                    padding: '4px 8px',
+                  }}
+                >
+                  OLDER ▶
+                </button>
+              </div>
+            )}
+
             {/* Meta */}
             <div style={{
               marginBottom: 16, padding: '8px 12px',
@@ -187,12 +232,14 @@ export function PastWinnersModal({ onClose }: Props) {
             </div>
 
             {/* TX link */}
-            <div style={{
-              marginTop: 14, fontFamily: 'var(--font-pixel)', fontSize: 7,
-              color: 'var(--color-text-dim)', textAlign: 'center',
-            }}>
-              TX: {data.txHash.slice(0, 10)}…{data.txHash.slice(-8)}
-            </div>
+            {data.txHash && (
+              <div style={{
+                marginTop: 14, fontFamily: 'var(--font-pixel)', fontSize: 7,
+                color: 'var(--color-text-dim)', textAlign: 'center',
+              }}>
+                TX: {data.txHash.slice(0, 10)}…{data.txHash.slice(-8)}
+              </div>
+            )}
           </>
         )}
       </div>

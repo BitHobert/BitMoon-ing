@@ -285,7 +285,12 @@ export class ApiServer {
                 });
             }
 
-            res.json({ sessionId: session.sessionId, token, expiresAt: session.expiresAt });
+            res.json({
+                sessionId:      session.sessionId,
+                token,
+                expiresAt:      session.expiresAt,
+                turnsRemaining: session.turnsRemaining,
+            });
         } catch (err: unknown) {
             const statusCode = (err as { statusCode?: number }).statusCode ?? 400;
             res.status(statusCode).json({ error: (err as Error).message });
@@ -334,10 +339,21 @@ export class ApiServer {
             await this.leaderboard.saveResult(result);
         }
 
+        // Calculate remaining turns so the frontend can show "Play Next Turn" or "Buy More"
+        let turnsRemaining: number | undefined;
+        if (result.tournamentType && result.tournamentKey) {
+            try {
+                turnsRemaining = await this.tournament.getRemainingTurns(
+                    playerAddress, result.tournamentType, result.tournamentKey,
+                );
+            } catch { /* non-critical — default to undefined */ }
+        }
+
         if (Config.DEV_MODE) {
             console.log('[ApiServer] Session end:', {
                 sessionId, valid: result.isValid,
                 score: result.validatedScore, reason: result.rejectionReason,
+                turnsRemaining,
             });
         }
 
@@ -348,6 +364,8 @@ export class ApiServer {
             wavesCleared: result.wavesCleared,
             kills: result.kills,
             rejectionReason: result.rejectionReason ?? null,
+            tournamentType: result.tournamentType ?? null,
+            turnsRemaining: turnsRemaining ?? 0,
         });
     }
 
@@ -428,11 +446,12 @@ export class ApiServer {
             return;
         }
 
-        let body: { tournamentType: TournamentType; txHash: string };
+        let body: { tournamentType: TournamentType; txHash: string; quantity?: number };
         try { body = await req.json() as typeof body; }
         catch { res.status(400).json({ error: 'Invalid JSON body' }); return; }
 
         const { tournamentType, txHash } = body;
+        const quantity = Math.max(1, Math.min(10, Math.floor(body.quantity ?? 1)));
         if (!tournamentType || !txHash) {
             res.status(400).json({ error: 'Missing tournamentType or txHash' });
             return;
@@ -452,10 +471,7 @@ export class ApiServer {
             return;
         }
 
-        // Allow re-entry — player can pay again to top up the prize pool.
-        // The game session gate (hasEntry check in createSession) ensures they
-        // can play as many times as they want once they have at least one entry.
-
+        // Allow re-entry — each payment purchases N turns (quantity × fee).
         // Verify on-chain payment
         const verification = await this.payment.verifyPayment(txHash, playerAddress, tournamentType);
 
@@ -477,6 +493,8 @@ export class ApiServer {
                 paidAt:         Date.now(),
                 confirmations:  verification.confirmations,
                 isVerified:     verification.valid,
+                turnsTotal:     quantity,
+                turnsRemaining: quantity,
             });
 
             // Notify the on-chain contract to update pool accounting (non-blocking)
@@ -491,8 +509,9 @@ export class ApiServer {
                 entry:         { id: entry._id, tournamentType, tournamentKey: key },
                 confirmations: verification.confirmations,
                 isVerified:    verification.valid,
+                turnsTotal:    quantity,
                 message:       verification.valid
-                    ? 'Entry confirmed — you can now start a tournament session.'
+                    ? `Entry confirmed — ${quantity} turn${quantity > 1 ? 's' : ''} purchased.`
                     : `Entry pending — waiting for ${Config.MIN_PAYMENT_CONFIRMATIONS} confirmation(s).`,
             });
         } catch (err: unknown) {
@@ -619,16 +638,22 @@ export class ApiServer {
         });
     }
 
-    /** GET /v1/tournament/:type/winners — latest prize distribution for this tournament type */
+    /** GET /v1/tournament/:type/winners — recent prize distributions for this tournament type */
     private async handleGetLatestWinners(req: Req, res: Res): Promise<void> {
         const type = req.params['type'] as string;
         if (!['daily', 'weekly', 'monthly'].includes(type)) {
             res.status(400).json({ error: `Invalid tournament type: ${type}` });
             return;
         }
-        const dist = await PrizeDistributorService.getInstance()
-            .getLatestDistribution(type as TournamentType);
-        res.json({ tournamentType: type, distribution: dist ?? null });
+        const limit = Math.min(parseInt(String(req.query['limit'] ?? '10'), 10), 50);
+        const distributions = await PrizeDistributorService.getInstance()
+            .getRecentDistributions(type as TournamentType, limit);
+        // Keep backward compat: also include `distribution` (latest single) for older clients
+        res.json({
+            tournamentType: type,
+            distribution: distributions[0] ?? null,
+            distributions,
+        });
     }
 
     /** GET /v1/admin/prize-distributions — paginated list of all distributions */

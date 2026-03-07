@@ -40,26 +40,25 @@ export class GameSessionService {
 
     /**
      * Create a new game session for an authenticated player.
-     * If tournamentType is provided the player must have a verified entry for the current period.
+     * If tournamentType is provided, one turn is atomically consumed from
+     * the player's entry. Throws 403 if no turns remain.
      * Snapshots the current game supply for accurate server-side scoring.
+     *
+     * Returns the session plus turnsRemaining (for tournament sessions).
      */
     public async createSession(
         playerAddress: string,
         tournamentType?: TournamentType,
-    ): Promise<GameSession> {
-        // Tournament entry gate — must have a verified on-chain payment
+    ): Promise<GameSession & { turnsRemaining?: number }> {
+        // Tournament entry gate — consume one turn atomically
         let tournamentKey: string | undefined;
+        let turnsRemaining: number | undefined;
         if (tournamentType !== undefined) {
             const ts = TournamentService.getInstance();
             // getTournamentKey() throws 404 if currently in the inter-period gap
             tournamentKey = await ts.getTournamentKey(tournamentType);
-            const has = await ts.hasEntry(playerAddress, tournamentType, tournamentKey);
-            if (!has) {
-                throw Object.assign(
-                    new Error(`No verified tournament entry found for ${tournamentType}`),
-                    { statusCode: 403 },
-                );
-            }
+            const turns = await ts.consumeTurn(playerAddress, tournamentType, tournamentKey);
+            turnsRemaining = turns.turnsRemaining;
         }
 
         this.invalidatePlayerSessions(playerAddress);
@@ -81,7 +80,10 @@ export class GameSessionService {
         this.sessions.set(sessionId, session);
         this.sessionSupply.set(sessionId, supplyAtStart);
 
-        return session;
+        return {
+            ...session,
+            ...(turnsRemaining !== undefined ? { turnsRemaining } : {}),
+        };
     }
 
     public getSession(sessionId: string): GameSession | null {

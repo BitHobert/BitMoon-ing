@@ -3,6 +3,7 @@ import type { Collection, Db, IndexDescription } from 'mongodb';
 import { Config } from '../config/Config.js';
 import { OPNetService } from './OPNetService.js';
 import type {
+    PrizeDistribution,
     TournamentEntry,
     TournamentFeeConfig,
     TournamentInfo,
@@ -46,8 +47,9 @@ export interface TournamentPeriod {
 export class TournamentService {
     private static instance: TournamentService;
 
-    private feeConfigs!: Collection<FeeConfigDoc>;
-    private entries!:    Collection<EntryDoc>;
+    private feeConfigs!:    Collection<FeeConfigDoc>;
+    private entries!:       Collection<EntryDoc>;
+    private distributions!: Collection<PrizeDistribution>;
 
     private constructor() {}
 
@@ -61,8 +63,9 @@ export class TournamentService {
     // ── Lifecycle ──────────────────────────────────────────────────────────────
 
     public async connect(db: Db): Promise<void> {
-        this.feeConfigs = db.collection<FeeConfigDoc>('tournament_config');
-        this.entries    = db.collection<EntryDoc>('tournament_entries');
+        this.feeConfigs    = db.collection<FeeConfigDoc>('tournament_config');
+        this.entries       = db.collection<EntryDoc>('tournament_entries');
+        this.distributions = db.collection<PrizeDistribution>('prize_distributions');
 
         await this.ensureIndexes();
         await this.seedFeeConfigs();
@@ -195,7 +198,10 @@ export class TournamentService {
 
     // ── Entry management ───────────────────────────────────────────────────────
 
-    public async hasEntry(
+    /**
+     * Check whether the player has any unused turns for the given period.
+     */
+    public async hasAvailableTurn(
         playerAddress: string,
         type: TournamentType,
         key: string,
@@ -205,8 +211,63 @@ export class TournamentService {
             tournamentType: type,
             tournamentKey: key,
             isVerified: true,
+            turnsRemaining: { $gt: 0 },
         });
         return count > 0;
+    }
+
+    /**
+     * Atomically consume one turn from the player's entry.
+     * Picks the most recent entry that still has remaining turns.
+     * Throws 403 if no turns remain.
+     */
+    public async consumeTurn(
+        playerAddress: string,
+        type: TournamentType,
+        key: string,
+    ): Promise<{ turnsRemaining: number }> {
+        const result = await this.entries.findOneAndUpdate(
+            {
+                playerAddress,
+                tournamentType: type,
+                tournamentKey: key,
+                isVerified: true,
+                turnsRemaining: { $gt: 0 },
+            },
+            { $inc: { turnsRemaining: -1 } },
+            { sort: { paidAt: -1 }, returnDocument: 'after' },
+        );
+        if (!result) {
+            throw Object.assign(
+                new Error('No turns remaining — purchase more to play again'),
+                { statusCode: 403 },
+            );
+        }
+        // Sum remaining across ALL entries for this player/period
+        const totalRemaining = await this.getRemainingTurns(playerAddress, type, key);
+        return { turnsRemaining: totalRemaining };
+    }
+
+    /**
+     * Total unused turns across all entries for a player in a given period.
+     */
+    public async getRemainingTurns(
+        playerAddress: string,
+        type: TournamentType,
+        key: string,
+    ): Promise<number> {
+        const entries = await this.entries
+            .find({
+                playerAddress,
+                tournamentType: type,
+                tournamentKey: key,
+                isVerified: true,
+            })
+            .toArray();
+        return entries.reduce(
+            (sum, e) => sum + Math.max(0, e.turnsRemaining ?? 0),
+            0,
+        );
     }
 
     public async recordEntry(data: Omit<TournamentEntry, '_id'>): Promise<TournamentEntry> {
@@ -226,6 +287,51 @@ export class TournamentService {
         );
     }
 
+    // ── Carryover ─────────────────────────────────────────────────────────────
+
+    /**
+     * Compute the total undistributed carryover for a tournament period.
+     *
+     * Walks backwards through previous periods, summing each period's 15 % nextPool,
+     * until it reaches a period that was actually distributed (had winners).
+     * This ensures carryover rolls forward across empty periods instead of being lost.
+     *
+     * Example: Period A (distributed, nextPool=750) → B (empty) → C (empty) → D (current)
+     *   → D's carryover = A.nextPool + B.nextPool(0) + C.nextPool(0) = 750
+     */
+    public async computeCarryover(type: TournamentType, currentPeriodKey: string): Promise<bigint> {
+        const MAX_LOOKBACK = 50; // safety limit to prevent runaway walk-backs
+        let total = 0n;
+        let key: string | null = this.getPreviousPeriodKey(type, currentPeriodKey);
+        let iterations = 0;
+
+        while (key !== null && iterations < MAX_LOOKBACK) {
+            iterations++;
+
+            // Add this period's 15 % nextPool contribution
+            const nextPool = await this.getNextPool(type, key);
+            total += nextPool;
+
+            // Check if this period was distributed WITH winners.
+            // Empty distributions (0 winners from the old bug) are treated as "not distributed"
+            // so carryover continues to accumulate past them.
+            const dist = await this.distributions.findOne(
+                { tournamentType: type, tournamentKey: key },
+                { projection: { winners: 1 } },
+            );
+
+            if (dist && dist.winners && dist.winners.length > 0) {
+                // This period had a real distribution — its carryover was consumed. Stop here.
+                break;
+            }
+
+            // No distribution (or empty distribution) — keep walking back
+            key = this.getPreviousPeriodKey(type, key);
+        }
+
+        return total;
+    }
+
     // ── Aggregations ───────────────────────────────────────────────────────────
 
     public async getActiveTournaments(): Promise<TournamentInfo[]> {
@@ -238,11 +344,10 @@ export class TournamentService {
                 const period = this.computePeriod(type, currentBlock);
                 const config = await this.getFeeConfig(type);
 
-                // 15% carryover from the PREVIOUS period adds to this period's prize pool
-                const prevKey = this.getPreviousPeriodKey(type, period.tournamentKey);
+                // Walk backwards to accumulate all undistributed carryover
                 const [currentPool, carryover, nextPool, count] = await Promise.all([
                     this.getPrizePool(type, period.tournamentKey),
-                    prevKey ? this.getNextPool(type, prevKey) : Promise.resolve(0n),
+                    this.computeCarryover(type, period.tournamentKey),
                     this.getNextPool(type, period.tournamentKey),
                     this.getEntryCount(type, period.tournamentKey),
                 ]);

@@ -46,6 +46,7 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
   const [step,       setStep]       = useState<Step>('review');
   const [txHash,     setTxHash]     = useState<string | null>(null);
   const [errorMsg,   setErrorMsg]   = useState<string | null>(null);
+  const [quantity,   setQuantity]   = useState(1);
 
   // ── Load tournament info ───────────────────────────────────────────────────
   useEffect(() => {
@@ -98,8 +99,8 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
       let txid: string;
 
       if (tournament.tokenAddress) {
-        // OP-20 token transfer (LFGT or other token)
-        const amount = BigInt(tournament.entryFee);
+        // OP-20 token transfer (LFGT or other token) — quantity × fee
+        const amount = BigInt(tournament.entryFee) * BigInt(quantity);
         txid = await wallet.sendTokenTransfer(
           tournament.tokenAddress,
           tournament.prizeContractAddress,
@@ -107,7 +108,7 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
         );
       } else {
         // Native BTC fallback (for when opnet.web3.sendBitcoin is fixed)
-        const satoshis = Number(BigInt(tournament.entryFee));
+        const satoshis = Number(BigInt(tournament.entryFee) * BigInt(quantity));
         txid = await wallet.sendBitcoin(tournament.prizeContractAddress, satoshis);
       }
 
@@ -118,6 +119,7 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
       await enterTournament(token, {
         tournamentType: tournament.tournamentType,
         txHash:         txid,
+        quantity,
       });
 
       setStep('done');
@@ -129,7 +131,7 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
       setErrorMsg(msg);
       setStep('error');
     }
-  }, [tournament, wallet, ensureToken, navigate]);
+  }, [tournament, wallet, ensureToken, navigate, quantity]);
 
   // ── Guards ────────────────────────────────────────────────────────────────
 
@@ -155,6 +157,7 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
 
   const color      = TYPE_COLORS[tournament.tournamentType] ?? 'var(--color-orange)';
   const feeTokens  = fmtTokens(tournament.entryFee);
+  const totalCost  = fmtTokens((BigInt(tournament.entryFee) * BigInt(quantity)).toString());
   const prizePool  = fmtTokens(tournament.prizePool);
   const tokenLabel = tournament.tokenAddress ? 'LFGT' : 'tBTC';
 
@@ -193,13 +196,56 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
         {/* Step content */}
         {step === 'review' && (
           <>
+            {/* Quantity selector */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{
+                fontFamily: 'var(--font-pixel)', fontSize: 7,
+                color: 'var(--color-text-dim)', marginBottom: 8,
+              }}>
+                HOW MANY TURNS?
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[1, 3, 5, 10].map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => setQuantity(q)}
+                    style={{
+                      flex: 1,
+                      padding: '8px 4px',
+                      fontFamily: 'var(--font-pixel)',
+                      fontSize: 9,
+                      cursor: 'pointer',
+                      background: quantity === q ? 'var(--color-orange)' : 'transparent',
+                      color:      quantity === q ? '#000' : 'var(--color-text-dim)',
+                      border:     `1px solid ${quantity === q ? 'var(--color-orange)' : 'var(--color-border)'}`,
+                      borderRadius: 2,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Cost breakdown */}
             <div style={{
               background: 'rgba(247,147,26,0.07)', border: '1px solid rgba(247,147,26,0.2)',
               borderRadius: 3, padding: '10px 14px', marginBottom: 18,
               fontFamily: 'var(--font-pixel)', fontSize: 8, color: 'var(--color-text-dim)', lineHeight: 2,
             }}>
-              Sending entry fee transfers <strong style={{ color: 'var(--color-orange)' }}>{feeTokens} {tokenLabel}</strong> to the prize contract.
-              Your score will be eligible for the {tournament.tournamentType} prize pool.
+              {quantity > 1 ? (
+                <>
+                  <strong style={{ color: 'var(--color-orange)' }}>{quantity} turns</strong> × {feeTokens} {tokenLabel} = <strong style={{ color: 'var(--color-orange)' }}>{totalCost} {tokenLabel}</strong>
+                  <br/>
+                  Each turn is one game. Every score counts to the leaderboard.
+                </>
+              ) : (
+                <>
+                  Sending <strong style={{ color: 'var(--color-orange)' }}>{feeTokens} {tokenLabel}</strong> for 1 turn.
+                  Your score will be eligible for the {tournament.tournamentType} prize pool.
+                </>
+              )}
             </div>
 
             <div style={{ display: 'flex', gap: 10 }}>
@@ -211,10 +257,9 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
                 style={{ flex: 2, fontSize: 8 }}
                 onClick={() => void handlePay()}
               >
-                SEND ENTRY FEE →
+                {quantity > 1 ? `BUY ${quantity} TURNS →` : 'SEND ENTRY FEE →'}
               </button>
             </div>
-
           </>
         )}
 
@@ -262,7 +307,10 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
           <div style={{ textAlign: 'center', padding: '16px 0' }}>
             <div className="pixel glow-orange" style={{ fontSize: 14, marginBottom: 10 }}>🎮 ENTRY CONFIRMED!</div>
             <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 8, color: 'var(--color-text-dim)' }}>
-              Starting game…
+              {quantity > 1
+                ? `${quantity} turns purchased — starting game…`
+                : 'Starting game…'
+              }
             </div>
           </div>
         )}
