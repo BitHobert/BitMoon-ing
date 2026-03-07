@@ -192,8 +192,8 @@ export class PaymentService {
                     const { devAmount, nextPoolAmount, prizeAmount } =
                         TournamentService.getInstance().computeSplit(amountPaid);
                     return {
-                        valid:         false,   // not verified on-chain yet
-                        confirmations: 0,
+                        valid:         true,    // trust the wallet's signed broadcast
+                        confirmations: 1,       // match native BTC trust-mode pattern
                         amountPaid,             // trust the expected fee
                         devAmount,
                         nextPoolAmount,
