@@ -164,11 +164,47 @@ export class PaymentService {
         const expectedTotal = BigInt(feeConfig.entryFee);
         const provider      = OPNetService.getInstance().getProvider();
 
-        let tx: Awaited<ReturnType<typeof provider.getTransaction>>;
-        try {
-            tx = await provider.getTransaction(txHash);
-        } catch (err) {
-            return invalid(`RPC error: ${err instanceof Error ? err.message : String(err)}`);
+        // The transaction may not be indexed yet (just broadcast, still in mempool).
+        // Retry a few times with short delays before falling back to trust mode.
+        const MAX_RETRIES  = 3;
+        const RETRY_DELAY  = 2500; // ms
+
+        let tx: Awaited<ReturnType<typeof provider.getTransaction>> | null = null;
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                tx = await provider.getTransaction(txHash);
+                break;
+            } catch (err) {
+                if (attempt < MAX_RETRIES) {
+                    console.log(
+                        `[PaymentService] Tx ${txHash.slice(0, 12)}… not indexed yet ` +
+                        `(attempt ${attempt}/${MAX_RETRIES}), retrying in ${RETRY_DELAY}ms…`,
+                    );
+                    await new Promise((r) => setTimeout(r, RETRY_DELAY));
+                } else {
+                    // All retries exhausted — accept on trust (mirrors native BTC path).
+                    // The wallet already signed + broadcast; the RPC just hasn't indexed it yet.
+                    console.warn(
+                        `[PaymentService] Could not fetch OP-20 tx ${txHash} after ` +
+                        `${MAX_RETRIES} retries — accepting on trust (testnet)`,
+                    );
+                    const amountPaid = expectedTotal;
+                    const { devAmount, nextPoolAmount, prizeAmount } =
+                        TournamentService.getInstance().computeSplit(amountPaid);
+                    return {
+                        valid:         false,   // not verified on-chain yet
+                        confirmations: 0,
+                        amountPaid,             // trust the expected fee
+                        devAmount,
+                        nextPoolAmount,
+                        prizeAmount,
+                    };
+                }
+            }
+        }
+
+        if (!tx) {
+            return invalid('Transaction lookup returned empty result');
         }
 
         if (tx.revert !== undefined) {
