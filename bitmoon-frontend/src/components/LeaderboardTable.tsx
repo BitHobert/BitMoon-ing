@@ -51,7 +51,7 @@ export function LeaderboardTable() {
           </thead>
           <tbody>
             {entries.map((e) => (
-              <tr key={e.playerAddress} style={{
+              <tr key={`${e.playerAddress}-${e.achievedAt}-${e.rank}`} style={{
                 borderTop: '1px solid var(--color-border)',
                 color: e.rank <= 3 ? 'var(--color-orange)' : 'var(--color-text)',
               }}>

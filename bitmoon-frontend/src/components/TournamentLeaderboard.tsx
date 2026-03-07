@@ -139,7 +139,7 @@ export function TournamentLeaderboard({ prizePools }: Props) {
               );
               return (
                 <tr
-                  key={e.playerAddress}
+                  key={`${e.playerAddress}-${e.achievedAt}-${e.rank}`}
                   style={{
                     borderTop:  '1px solid var(--color-border)',
                     background: isMe ? `${color}18` : 'transparent',
