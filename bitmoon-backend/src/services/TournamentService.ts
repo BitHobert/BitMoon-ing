@@ -395,12 +395,16 @@ export class TournamentService {
         return docs.reduce((acc, doc) => acc + BigInt(doc.nextPoolAmount), 0n);
     }
 
+    /**
+     * Total games purchased (sum of turnsTotal) for a tournament period.
+     * Represents total plays, not unique players.
+     */
     public async getEntryCount(type: TournamentType, key: string): Promise<number> {
-        return this.entries.countDocuments({
-            tournamentType: type,
-            tournamentKey: key,
-            isVerified: true,
-        });
+        const result = await this.entries.aggregate<{ total: number }>([
+            { $match: { tournamentType: type, tournamentKey: key, isVerified: true } },
+            { $group: { _id: null, total: { $sum: '$turnsTotal' } } },
+        ]).toArray();
+        return result[0]?.total ?? 0;
     }
 
     // ── Private helpers ────────────────────────────────────────────────────────

@@ -125,7 +125,7 @@ export function TournamentCard({ info, navigate, playerRank }: Props) {
       {/* Stats: Players & Entry Fee on one line */}
       <div style={{ fontSize: 9, fontFamily: 'var(--font-pixel)', color: 'var(--color-text-dim)' }}>
         <div style={{ marginBottom: 4 }}>
-          <span style={{ color: 'var(--color-text)' }}>{info.entrantCount}</span> PLAYERS · <span style={{ color: 'var(--color-text)' }}>{feeDisplay}</span> LFGT ENTRY FEE
+          <span style={{ color: 'var(--color-text)' }}>{info.entrantCount}</span> PLAYS · <span style={{ color: 'var(--color-text)' }}>{feeDisplay}</span> LFGT ENTRY FEE
         </div>
         <div>
           TOURNAMENT END BLOCK <span style={{ color: 'var(--color-text)' }}>{Number(endBlock).toLocaleString()}</span>
