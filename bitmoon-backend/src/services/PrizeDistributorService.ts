@@ -569,7 +569,11 @@ export class PrizeDistributorService {
      */
     private async resolveAddress(bech32Address: string, isContract = false): Promise<Address> {
         const provider = OPNetService.getInstance().getProvider();
-        return provider.getPublicKeyInfo(bech32Address, isContract);
+        const addr = await provider.getPublicKeyInfo(bech32Address, isContract);
+        if (!addr) {
+            throw new Error(`Could not resolve address: ${bech32Address}`);
+        }
+        return addr;
     }
 
     private isContractReady(): boolean {
