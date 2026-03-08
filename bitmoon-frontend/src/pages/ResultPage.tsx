@@ -26,7 +26,7 @@ export function ResultPage({ navigate, ctx }: Props) {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      height: '100vh', background: 'var(--color-bg)', gap: 24, padding: 24,
+      minHeight: 'calc(100vh - 60px)', position: 'relative', zIndex: 1, gap: 24, padding: 24,
     }}>
       {/* Header */}
       <div className="pixel glow-orange" style={{ fontSize: 20 }}>GAME OVER</div>
@@ -99,12 +99,12 @@ export function ResultPage({ navigate, ctx }: Props) {
 
         {/* Non-tournament guest play */}
         {!tournamentType && (
-          <button className="btn btn-solid-orange" onClick={() => navigate('lobby')}>
-            BACK TO LOBBY
+          <button className="btn btn-solid-orange" onClick={() => navigate('home')}>
+            BACK TO HOME
           </button>
         )}
 
-        <button className="btn btn-blue" onClick={() => navigate('lobby')}>
+        <button className="btn btn-blue" onClick={() => navigate('home')}>
           LEADERBOARD
         </button>
       </div>

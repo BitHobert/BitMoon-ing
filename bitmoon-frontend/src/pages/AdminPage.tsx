@@ -112,7 +112,7 @@ export function AdminPage({ navigate }: Props) {
 
   if (!authenticated) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--color-bg)', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 60px)', position: 'relative', zIndex: 1, alignItems: 'center', justifyContent: 'center' }}>
         <div className="card" style={{ maxWidth: 400, width: '100%', display: 'flex', flexDirection: 'column', gap: 16 }}>
           <h1 className="pixel glow-orange" style={{ fontSize: 14, textAlign: 'center' }}>ADMIN PANEL</h1>
           <p style={{ color: 'var(--color-text-dim)', fontFamily: 'var(--font-mono)', fontSize: 11, textAlign: 'center' }}>
@@ -127,7 +127,7 @@ export function AdminPage({ navigate }: Props) {
             style={inputStyle}
           />
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-blue" style={{ flex: 1, fontSize: 9 }} onClick={() => navigate('lobby')}>
+            <button className="btn btn-blue" style={{ flex: 1, fontSize: 9 }} onClick={() => navigate('home')}>
               ← BACK
             </button>
             <button className="btn btn-solid-orange" style={{ flex: 1, fontSize: 9 }} onClick={handleAuth}>
@@ -142,21 +142,23 @@ export function AdminPage({ navigate }: Props) {
   // ── Main admin panel ──────────────────────────────────────────────────────────
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--color-bg)' }}>
-
-      {/* Header */}
-      <header style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '14px 24px', borderBottom: '1px solid var(--color-border)',
-        background: 'var(--color-bg-card)', gap: 16, flexWrap: 'wrap',
-      }}>
-        <div className="pixel glow-orange" style={{ fontSize: 14, letterSpacing: 2 }}>ADMIN</div>
-        <button className="btn btn-blue" style={{ fontSize: 8 }} onClick={() => navigate('lobby')}>
-          ← LOBBY
+    <div style={{
+      position: 'relative', zIndex: 1,
+      padding: '24px 20px', maxWidth: 900, margin: '0 auto', width: '100%',
+      display: 'flex', flexDirection: 'column', gap: 24,
+      minHeight: 'calc(100vh - 60px)',
+    }}>
+      {/* Page title */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button
+          className="btn btn-orange"
+          style={{ fontSize: 8, padding: '6px 12px' }}
+          onClick={() => navigate('home')}
+        >
+          ← HOME
         </button>
-      </header>
-
-      <main style={{ flex: 1, padding: 24, display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 900, margin: '0 auto', width: '100%' }}>
+        <h1 className="pixel glow-orange" style={{ fontSize: 14, margin: 0 }}>ADMIN</h1>
+      </div>
 
         {/* ── Deposit Sponsor Bonus ────────────────────────────────────────── */}
         <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -340,17 +342,6 @@ export function AdminPage({ navigate }: Props) {
           )}
         </section>
 
-      </main>
-
-      {/* Footer */}
-      <footer style={{
-        padding: '10px 24px', borderTop: '1px solid var(--color-border)',
-        fontFamily: 'var(--font-pixel)', fontSize: 8, color: 'var(--color-text-dim)',
-        display: 'flex', justifyContent: 'space-between',
-      }}>
-        <span>BITMOON'ING ADMIN</span>
-        <span style={{ color: 'var(--color-green)' }}>● CONNECTED</span>
-      </footer>
     </div>
   );
 }

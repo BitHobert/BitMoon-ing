@@ -50,14 +50,14 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
 
   // ── Load tournament info ───────────────────────────────────────────────────
   useEffect(() => {
-    if (!tournamentType) { navigate('lobby'); return; }
+    if (!tournamentType) { navigate('home'); return; }
     getTournaments()
       .then((r) => {
         const t = r.tournaments.find((x) => x.tournamentType === tournamentType);
-        if (!t) { navigate('lobby'); return; }
+        if (!t) { navigate('home'); return; }
         setTournament(t);
       })
-      .catch(() => navigate('lobby'))
+      .catch(() => navigate('home'))
       .finally(() => setLoading(false));
   }, [tournamentType, navigate]);
 
@@ -142,7 +142,7 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
         <p style={{ fontFamily: 'var(--font-pixel)', fontSize: 8, color: 'var(--color-text-dim)', textAlign: 'center', maxWidth: 300, lineHeight: 2, marginBottom: 20 }}>
           Connect your wallet to enter tournaments.
         </p>
-        <button className="btn btn-orange" onClick={() => navigate('lobby')}>BACK TO LOBBY</button>
+        <button className="btn btn-orange" onClick={() => navigate('home')}>BACK TO HOME</button>
       </CenteredLayout>
     );
   }
@@ -166,7 +166,7 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      minHeight: '100vh', background: 'var(--color-bg)', padding: 24, gap: 20,
+      minHeight: 'calc(100vh - 60px)', position: 'relative', zIndex: 1, padding: 24, gap: 20,
     }}>
       {/* Title */}
       <div className="pixel glow-orange" style={{ fontSize: 14 }}>ENTER TOURNAMENT</div>
@@ -249,7 +249,7 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
             </div>
 
             <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn btn-blue" style={{ flex: 1, fontSize: 8 }} onClick={() => navigate('lobby')}>
+              <button className="btn btn-blue" style={{ flex: 1, fontSize: 8 }} onClick={() => navigate('home')}>
                 CANCEL
               </button>
               <button
@@ -326,8 +326,8 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
               ⚠ {errorMsg ?? 'An error occurred.'}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn btn-blue" style={{ flex: 1, fontSize: 8 }} onClick={() => navigate('lobby')}>
-                LOBBY
+              <button className="btn btn-blue" style={{ flex: 1, fontSize: 8 }} onClick={() => navigate('home')}>
+                HOME
               </button>
               <button
                 className="btn btn-orange"
@@ -368,7 +368,7 @@ function CenteredLayout({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center',
-      justifyContent: 'center', height: '100vh', background: 'var(--color-bg)', gap: 16,
+      justifyContent: 'center', minHeight: 'calc(100vh - 60px)', position: 'relative', zIndex: 1, gap: 16,
     }}>
       {children}
     </div>

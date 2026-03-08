@@ -146,7 +146,7 @@ export function GamePage({ navigate, ctx }: Props) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--color-bg)', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--color-bg)', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
       {/* HUD */}
       <GameHUD
         score={score}
