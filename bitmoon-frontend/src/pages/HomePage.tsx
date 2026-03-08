@@ -78,10 +78,14 @@ interface Props { navigate: NavigateFn; }
 export function HomePage({ navigate }: Props) {
   const { address } = useWalletContext();
   const [tournaments, setTournaments] = useState<TournamentInfo[]>([]);
+  const [currentBlock, setCurrentBlock] = useState<number | null>(null);
 
   useEffect(() => {
     getTournaments()
-      .then((r) => setTournaments(r.tournaments))
+      .then((r) => {
+        setTournaments(r.tournaments);
+        setCurrentBlock(Number(r.currentBlock));
+      })
       .catch(console.error);
   }, []);
 
@@ -185,6 +189,29 @@ export function HomePage({ navigate }: Props) {
                       <span style={{ margin: '0 6px' }}>·</span>
                       <span style={{ color: 'var(--color-text)' }}>{formatTokens(info.entryFee)}</span> ENTRY
                     </div>
+                    {info.sponsorBonuses && info.sponsorBonuses.length > 0 && (() => {
+                      const bySymbol = new Map<string, bigint>();
+                      for (const b of info.sponsorBonuses) {
+                        const sym = b.tokenSymbol || 'BONUS';
+                        bySymbol.set(sym, (bySymbol.get(sym) ?? 0n) + BigInt(b.amount));
+                      }
+                      return (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {[...bySymbol.entries()].map(([sym, total]) => (
+                            <span key={sym} style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 3,
+                              padding: '2px 6px', borderRadius: 3, fontSize: 7,
+                              fontFamily: 'var(--font-pixel)',
+                              background: 'rgba(57,255,20,0.1)', border: '1px solid rgba(57,255,20,0.3)',
+                              color: 'var(--color-green)',
+                            }}>
+                              <span style={{ fontSize: 8 }}>⭐</span>
+                              +{formatTokens(total.toString())} {sym}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </>
                 ) : (
                   <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 9, color: 'var(--color-text-dim)' }}>
@@ -193,13 +220,27 @@ export function HomePage({ navigate }: Props) {
                 )}
               </div>
 
-              {/* Right: status + arrow */}
+              {/* Right: status + blocks + arrow */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
                 {info && (
                   <span style={{
                     fontFamily: 'var(--font-pixel)', fontSize: 8,
                   }}>
-                    {info.isActive ? <span style={{ color: 'var(--color-green)' }}>● LIVE</span> : <><span style={{ color: '#ffd700' }}>🏆 DISTRIBUTING</span>{' · '}<span style={{ color }}>⏳ NEXT TOURNAMENT STARTS AT BLOCK {Number(info.nextStartBlock).toLocaleString()}</span></>}
+                    {info.isActive ? (
+                      <>
+                        <span style={{ color: 'var(--color-green)' }}>● LIVE</span>
+                        {currentBlock != null && (
+                          <>
+                            <span style={{ margin: '0 6px', color: 'var(--color-text-dim)' }}>·</span>
+                            <span style={{ color: '#ffd700' }}>
+                              {Math.max(0, Number(info.endsAtBlock) - currentBlock).toLocaleString()} BLOCKS LEFT
+                            </span>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <><span style={{ color: '#ffd700' }}>🏆 DISTRIBUTING</span>{' · '}<span style={{ color }}>⏳ NEXT TOURNAMENT STARTS AT BLOCK {Number(info.nextStartBlock).toLocaleString()}</span></>
+                    )}
                   </span>
                 )}
                 {(!info || info.isActive) && (

@@ -225,7 +225,7 @@ export function TournamentDetailPage({ navigate, ctx }: Props) {
 
         {/* Prize breakdown */}
         <div style={{
-          display: 'flex', gap: 16, flexWrap: 'wrap',
+          display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center',
           padding: '10px 12px', borderRadius: 4,
           background: 'var(--color-bg)',
           fontFamily: 'var(--font-pixel)', fontSize: 9,
@@ -244,6 +244,15 @@ export function TournamentDetailPage({ navigate, ctx }: Props) {
             <div style={{ fontSize: 16, marginBottom: 4 }}>🥉</div>
             <div style={{ color: 'var(--color-green)' }}>{prize3}</div>
             <div style={{ color: 'var(--color-text-dim)', fontSize: 7, marginTop: 2 }}>10%</div>
+          </div>
+          <div style={{
+            marginLeft: 'auto', textAlign: 'right',
+            padding: '6px 14px', borderRadius: 3,
+            border: '1px solid rgba(255,215,0,0.25)',
+            background: 'rgba(255,215,0,0.06)',
+          }}>
+            <div style={{ fontSize: 7, color: 'var(--color-text-dim)', marginBottom: 3 }}>TOTAL PRIZE POOL</div>
+            <div style={{ fontSize: 14, color: '#ffd700' }}>{formatTokens(info.prizePool)} LFGT</div>
           </div>
         </div>
       </div>
