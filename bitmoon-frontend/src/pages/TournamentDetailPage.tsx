@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { NavigateFn, PageContext } from '../App';
-import { getTournaments, getTournamentLeaderboard, getTournamentWinners } from '../api/http';
+import { getTournaments, getTournamentLeaderboard, getTournamentWinners, getTurnsRemaining } from '../api/http';
 import type { TournamentInfo, TournamentType, LeaderboardEntry, PrizeDistribution } from '../types';
 import { useWalletContext } from '../context/WalletContext';
 import { useBlockHeight } from '../hooks/useBlockHeight';
@@ -51,6 +51,7 @@ export function TournamentDetailPage({ navigate, ctx }: Props) {
   const [info, setInfo] = useState<TournamentInfo | null>(null);
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [pastWinners, setPastWinners] = useState<PrizeDistribution[]>([]);
+  const [turnsLeft, setTurnsLeft] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -71,6 +72,14 @@ export function TournamentDetailPage({ navigate, ctx }: Props) {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [tournamentType]);
+
+  // Fetch remaining turns when wallet is connected
+  useEffect(() => {
+    if (!address) { setTurnsLeft(null); return; }
+    getTurnsRemaining(tournamentType, address)
+      .then((r) => setTurnsLeft(r.turnsRemaining))
+      .catch(() => setTurnsLeft(null));
+  }, [tournamentType, address]);
 
   if (loading) {
     return (
@@ -149,12 +158,20 @@ export function TournamentDetailPage({ navigate, ctx }: Props) {
           {info.isActive ? '● LIVE' : '🏆 DISTRIBUTING'}
         </span>
         {blocksRemaining !== null && info.isActive && (
-          <span style={{
-            fontFamily: 'var(--font-pixel)', fontSize: 8,
-            color: 'var(--color-text-dim)', marginLeft: 'auto',
-          }}>
-            {blocksRemaining.toLocaleString()} BLOCKS LEFT
-          </span>
+          <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+            <div style={{
+              fontFamily: 'var(--font-pixel)', fontSize: 16,
+              color: 'var(--color-green)',
+            }}>
+              {blocksRemaining.toLocaleString()} BLOCKS LEFT
+            </div>
+            <div style={{
+              fontFamily: 'var(--font-pixel)', fontSize: 14,
+              color: 'var(--color-orange)', marginTop: 4,
+            }}>
+              START {Number(info.startsAtBlock).toLocaleString()} · END {Number(info.endsAtBlock).toLocaleString()}
+            </div>
+          </div>
         )}
       </div>
 
@@ -175,7 +192,7 @@ export function TournamentDetailPage({ navigate, ctx }: Props) {
             LFGT
           </span>
           {carryoverAmt > 0n && (
-            <span style={{ fontFamily: 'var(--font-pixel)', fontSize: 8, color: 'var(--color-green)' }}>
+            <span style={{ fontFamily: 'var(--font-pixel)', fontSize: 16, color: 'var(--color-green)' }}>
               +{formatTokens(info.carryover)} carryover
             </span>
           )}
@@ -238,9 +255,8 @@ export function TournamentDetailPage({ navigate, ctx }: Props) {
         {([
           { label: 'PLAYS', value: info.entrantCount.toString(), color: 'var(--color-blue)' },
           { label: 'ENTRY FEE', value: `${feeDisplay} LFGT`, color: 'var(--color-orange)' },
-          { label: 'END BLOCK', value: Number(info.endsAtBlock).toLocaleString(), color: 'var(--color-text)' },
-          { label: 'START BLOCK', value: Number(info.startsAtBlock).toLocaleString(), color: 'var(--color-text-dim)' },
-        ] as const).map((s) => (
+          { label: 'REMAINING PLAYS', value: (turnsLeft ?? 0).toString(), color: (turnsLeft ?? 0) > 0 ? 'var(--color-green)' : '#ff4444' },
+        ]).map((s) => (
           <div key={s.label} className="card" style={{ flex: '1 1 140px', textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 14, color: s.color, marginBottom: 4 }}>
               {s.value}

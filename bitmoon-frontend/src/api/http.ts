@@ -107,6 +107,13 @@ export function getTournamentWinners(
   return request(`/v1/tournament/${type}/winners?limit=${limit}`);
 }
 
+export function getTurnsRemaining(
+  type: TournamentType,
+  address: string,
+): Promise<{ turnsRemaining: number }> {
+  return request(`/v1/tournament/${type}/turns/${encodeURIComponent(address)}`);
+}
+
 // ── Authenticated routes ──────────────────────────────────────────────────────
 
 export function enterTournament(

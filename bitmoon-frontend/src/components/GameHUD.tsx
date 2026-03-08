@@ -5,9 +5,10 @@ interface Props {
   wave:       number;
   lives:      number;
   tournamentType?: string;
+  turnsRemaining?: number;
 }
 
-export function GameHUD({ score, wave, lives, tournamentType }: Props) {
+export function GameHUD({ score, wave, lives, tournamentType, turnsRemaining }: Props) {
   return (
     <div style={{
       display: 'flex',
@@ -30,6 +31,9 @@ export function GameHUD({ score, wave, lives, tournamentType }: Props) {
         <Stat label="WAVE"   value={String(wave).padStart(2, '0')} color="var(--color-blue)" />
         {tournamentType && (
           <Stat label="MODE"   value={tournamentType.toUpperCase()} color="#b975ff" />
+        )}
+        {turnsRemaining != null && (
+          <Stat label="PLAYS LEFT" value={String(turnsRemaining)} color="var(--color-green)" />
         )}
       </div>
 

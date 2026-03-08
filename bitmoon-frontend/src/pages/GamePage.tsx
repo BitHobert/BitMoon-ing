@@ -19,6 +19,7 @@ export function GamePage({ navigate, ctx }: Props) {
   const [wave,          setWave]          = useState(1);
   const [lives,         setLives]         = useState(PLAYER_LIVES);
   const [loading,       setLoading]       = useState(true);
+  const [turnsLeft,     setTurnsLeft]     = useState<number | undefined>(undefined);
   const [currentPlanet,  setCurrentPlanet]  = useState<PlanetConfig | null>(null);
   const [weaponFrames,   setWeaponFrames]   = useState(0);
   const [laserFrames,    setLaserFrames]    = useState(0);
@@ -56,6 +57,7 @@ export function GamePage({ navigate, ctx }: Props) {
           sessionIdRef.current = resp.sessionId;
           tokenRef.current = resp.token;
           turnsRemainingRef.current = resp.turnsRemaining;
+          setTurnsLeft(resp.turnsRemaining);
           console.log('[GamePage] Game session created:', resp.sessionId, 'turnsRemaining:', resp.turnsRemaining);
         } else if (wallet.connected && wallet.address) {
           // No auth token yet — login first (non-tournament / first visit)
@@ -153,6 +155,7 @@ export function GamePage({ navigate, ctx }: Props) {
         wave={wave}
         lives={lives}
         tournamentType={ctx.tournamentType}
+        turnsRemaining={turnsLeft}
       />
 
       {/* Game area */}

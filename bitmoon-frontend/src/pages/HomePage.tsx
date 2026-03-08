@@ -107,10 +107,10 @@ export function HomePage({ navigate }: Props) {
           SHOOT TO EARN
         </h1>
         <p style={{
-          color: 'var(--color-text-dim)', fontFamily: 'var(--font-mono)', fontSize: 12,
+          color: 'var(--color-text-dim)', fontFamily: 'var(--font-mono)', fontSize: 18, whiteSpace: 'nowrap',
           maxWidth: 400, margin: '0 auto',
         }}>
-          Kill enemies · climb the leaderboard · win prizes
+          Kill enemies · climb the leaderboard
         </p>
       </div>
 
@@ -198,14 +198,15 @@ export function HomePage({ navigate }: Props) {
                 {info && (
                   <span style={{
                     fontFamily: 'var(--font-pixel)', fontSize: 8,
-                    color: info.isActive ? 'var(--color-green)' : '#ffd700',
                   }}>
-                    {info.isActive ? '● LIVE' : '🏆'}
+                    {info.isActive ? <span style={{ color: 'var(--color-green)' }}>● LIVE</span> : <><span style={{ color: '#ffd700' }}>🏆 DISTRIBUTING</span>{' · '}<span style={{ color }}>⏳ NEXT TOURNAMENT STARTS AT BLOCK {Number(info.nextStartBlock).toLocaleString()}</span></>}
                   </span>
                 )}
-                <span style={{ fontFamily: 'var(--font-pixel)', fontSize: 9, color }}>
-                  ENTER →
-                </span>
+                {(!info || info.isActive) && (
+                  <span style={{ fontFamily: 'var(--font-pixel)', fontSize: 9, color }}>
+                    ENTER →
+                  </span>
+                )}
               </div>
             </div>
           );
@@ -485,6 +486,30 @@ export function HomePage({ navigate }: Props) {
             </div>
             <div style={{ fontSize: 13, color: 'var(--color-text-dim)' }}>
               Sponsors can deposit bonus tokens into any tournament period. These bonuses are added on top of the regular prize pool and awarded to the 1st place winner. Sponsor slots are limited to 50 per period.
+            </div>
+          </div>
+
+          <div style={infoBlock}>
+            <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 12, color: 'var(--color-orange)', marginBottom: 4 }}>
+              TURNS & RE-ENTRY
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--color-text-dim)' }}>
+              Each entry fee purchase gives you play turns. Use them whenever you want during the purchased tournament period. Re-entering gameplay results in re-signing and tx.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+              {[
+                { icon: '🎮', text: 'Each entry fee = 1 play turn' },
+                { icon: '🔄', text: 'Buy more turns anytime to stack on top of remaining' },
+              ].map(r => (
+                <div key={r.text} style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '4px 10px', borderRadius: 3,
+                  background: 'var(--color-bg)', border: '1px solid var(--color-border)',
+                }}>
+                  <span style={{ fontSize: 12 }}>{r.icon}</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-pixel)', color: 'var(--color-text-dim)' }}>{r.text}</span>
+                </div>
+              ))}
             </div>
           </div>
         </section>

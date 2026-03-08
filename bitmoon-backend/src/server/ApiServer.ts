@@ -164,6 +164,10 @@ export class ApiServer {
             await this.handleGetLatestWinners(req, res);
         });
 
+        this.app.get('/v1/tournament/:type/turns/:address', async (req, res) => {
+            await this.handleGetRemainingTurns(req, res);
+        });
+
         // Tournament — player (Bearer auth)
         this.app.post('/v1/tournament/enter', async (req, res) => {
             await this.handleTournamentEnter(req, res);
@@ -654,6 +658,29 @@ export class ApiServer {
             distribution: distributions[0] ?? null,
             distributions,
         });
+    }
+
+    /** GET /v1/tournament/:type/turns/:address — remaining turns for a player */
+    private async handleGetRemainingTurns(req: Req, res: Res): Promise<void> {
+        const type = req.params['type'] as string;
+        if (!['daily', 'weekly', 'monthly'].includes(type)) {
+            res.status(400).json({ error: `Invalid tournament type: ${type}` });
+            return;
+        }
+        const address = req.params['address'] as string;
+        if (!address) {
+            res.status(400).json({ error: 'Missing address parameter' });
+            return;
+        }
+        let key: string;
+        try {
+            key = await this.tournament.getTournamentKey(type as TournamentType);
+        } catch {
+            res.json({ turnsRemaining: 0 });
+            return;
+        }
+        const turnsRemaining = await this.tournament.getRemainingTurns(address, type as TournamentType, key);
+        res.json({ turnsRemaining });
     }
 
     /** GET /v1/admin/prize-distributions — paginated list of all distributions */
