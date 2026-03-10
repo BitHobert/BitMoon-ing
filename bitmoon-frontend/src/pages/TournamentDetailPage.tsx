@@ -245,14 +245,25 @@ export function TournamentDetailPage({ navigate, ctx }: Props) {
             <div style={{ color: 'var(--color-green)' }}>{prize3}</div>
             <div style={{ color: 'var(--color-text-dim)', fontSize: 7, marginTop: 2 }}>10%</div>
           </div>
-          <div style={{
-            marginLeft: 'auto', textAlign: 'right',
-            padding: '6px 14px', borderRadius: 3,
-            border: '1px solid rgba(255,215,0,0.25)',
-            background: 'rgba(255,215,0,0.06)',
-          }}>
-            <div style={{ fontSize: 7, color: 'var(--color-text-dim)', marginBottom: 3 }}>TOTAL PRIZE POOL</div>
-            <div style={{ fontSize: 14, color: '#ffd700' }}>{formatTokens(info.prizePool)} LFGT</div>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div style={{
+              textAlign: 'center',
+              padding: '6px 14px', borderRadius: 3,
+              border: '1px solid rgba(100,149,237,0.25)',
+              background: 'rgba(100,149,237,0.06)',
+            }}>
+              <div style={{ fontSize: 7, color: 'var(--color-text-dim)', marginBottom: 3 }}>TOTAL PLAYS</div>
+              <div style={{ fontSize: 14, color: 'var(--color-blue)' }}>{info.entrantCount}</div>
+            </div>
+            <div style={{
+              textAlign: 'right',
+              padding: '6px 14px', borderRadius: 3,
+              border: '1px solid rgba(255,215,0,0.25)',
+              background: 'rgba(255,215,0,0.06)',
+            }}>
+              <div style={{ fontSize: 7, color: 'var(--color-text-dim)', marginBottom: 3 }}>TOTAL PRIZE POOL</div>
+              <div style={{ fontSize: 14, color: '#ffd700' }}>{formatTokens(info.prizePool)} LFGT</div>
+            </div>
           </div>
         </div>
       </div>
@@ -262,7 +273,7 @@ export function TournamentDetailPage({ navigate, ctx }: Props) {
         display: 'flex', gap: 12, flexWrap: 'wrap',
       }}>
         {([
-          { label: 'PLAYS', value: info.entrantCount.toString(), color: 'var(--color-blue)' },
+          { label: 'YOUR PLAYS', value: (address ? entries.filter(e => e.playerAddress.toLowerCase() === address.toLowerCase()).length : 0).toString(), color: 'var(--color-blue)' },
           { label: 'ENTRY FEE', value: `${feeDisplay} LFGT`, color: 'var(--color-orange)' },
           { label: 'REMAINING PLAYS', value: (turnsLeft ?? 0).toString(), color: (turnsLeft ?? 0) > 0 ? 'var(--color-green)' : '#ff4444' },
         ]).map((s) => (

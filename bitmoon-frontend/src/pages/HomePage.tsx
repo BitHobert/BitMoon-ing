@@ -519,6 +519,9 @@ export function HomePage({ navigate }: Props) {
             <div style={{ fontSize: 13, color: 'var(--color-text-dim)', marginTop: 8 }}>
               If fewer than 3 players enter, the split adjusts automatically. Unclaimed pools roll over to the next period.
             </div>
+            <div style={{ fontSize: 13, color: 'var(--color-text-dim)', marginTop: 8 }}>
+              If you're mid-game when a tournament ends, your score still counts — as long as your session started before the tournament ended, your entry is valid.
+            </div>
           </div>
 
           <div style={infoBlock}>
