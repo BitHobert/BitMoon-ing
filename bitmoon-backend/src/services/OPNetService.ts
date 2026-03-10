@@ -1,23 +1,27 @@
 import { JSONRpcProvider } from 'opnet';
+import { OPNetLimitedProvider } from '@btc-vision/transaction';
 import { Config } from '../config/Config.js';
 
 /**
- * Thin OPNet service kept for future use (e.g. on-chain verification).
+ * Centralised OPNet provider singleton.
  *
- * During gameplay the supply is tracked in MongoDB via GameSupplyService —
- * no contract calls are made here. This class exists only to hold a
- * configured provider instance ready for when mainnet integration is added.
+ * Caches both the full JSONRpcProvider (used for contract calls, block queries)
+ * and the lightweight OPNetLimitedProvider (used for UTXO fetching & broadcast).
+ * All services should obtain providers from here — never instantiate directly.
  */
 export class OPNetService {
     private static instance: OPNetService;
 
     private readonly provider: JSONRpcProvider;
+    private readonly limitedProvider: OPNetLimitedProvider;
 
     private constructor() {
         this.provider = new JSONRpcProvider({
             url: Config.OPNET_RPC_URL,
             network: Config.NETWORK,
         });
+
+        this.limitedProvider = new OPNetLimitedProvider(Config.OPNET_RPC_URL);
     }
 
     public static getInstance(): OPNetService {
@@ -27,8 +31,13 @@ export class OPNetService {
         return OPNetService.instance;
     }
 
-    /** Get the underlying provider (for future on-chain features). */
+    /** Full JSON-RPC provider for contract calls, block queries, address resolution. */
     public getProvider(): JSONRpcProvider {
         return this.provider;
+    }
+
+    /** Lightweight provider for UTXO fetching and transaction broadcasting. */
+    public getLimitedProvider(): OPNetLimitedProvider {
+        return this.limitedProvider;
     }
 }

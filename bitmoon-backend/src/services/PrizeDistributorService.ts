@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Collection, Db } from 'mongodb';
-import { Address, OPNetLimitedProvider, TransactionFactory, Wallet } from '@btc-vision/transaction';
+import { Address, TransactionFactory, Wallet } from '@btc-vision/transaction';
 import type { UTXO } from '@btc-vision/transaction';
 import { getContract, type IOP20Contract, OP_20_ABI, type OPNetEvent, type TransactionParameters } from 'opnet';
 import { Config } from '../config/Config.js';
@@ -32,6 +32,10 @@ export class PrizeDistributorService {
     private wallet!: Wallet;
     private operatorAddress!: Address;
     private watcherTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /** Cached contract instances — created once, reused for all calls. */
+    private cachedPrizeContract: IPrizeDistributorContract | null = null;
+    private cachedTokenContract: IOP20Contract | null = null;
 
     private constructor() {}
 
@@ -419,7 +423,7 @@ export class PrizeDistributorService {
         type: TournamentType,
         winners: Array<{ place: 1|2|3; address: string; amount: string }>,
     ): Promise<string[]> {
-        const utxoProvider = new OPNetLimitedProvider(Config.OPNET_RPC_URL);
+        const utxoProvider = OPNetService.getInstance().getLimitedProvider();
         const factory      = new TransactionFactory();
         const fromAddress  = Config.OPERATOR_P2TR_ADDRESS || this.wallet.p2tr;
         const txIds: string[] = [];
@@ -504,18 +508,20 @@ export class PrizeDistributorService {
             return [];
         }
 
-        const provider = OPNetService.getInstance().getProvider();
         const txIds: string[] = [];
 
-        // Build the OP-20 contract instance for the entry token (LFGT).
-        // ENTRY_TOKEN_ADDRESS is hex (0x...) so Address.fromString() is correct here.
-        const tokenContract = getContract<IOP20Contract>(
-            Address.fromString(Config.ENTRY_TOKEN_ADDRESS),
-            OP_20_ABI,
-            provider,
-            Config.NETWORK,
-            this.operatorAddress,
-        );
+        // Reuse the cached OP-20 contract instance (created once, stored on the service).
+        if (!this.cachedTokenContract) {
+            const provider = OPNetService.getInstance().getProvider();
+            this.cachedTokenContract = getContract<IOP20Contract>(
+                Address.fromString(Config.ENTRY_TOKEN_ADDRESS),
+                OP_20_ABI,
+                provider,
+                Config.NETWORK,
+                this.operatorAddress,
+            );
+        }
+        const tokenContract = this.cachedTokenContract;
 
         for (const winner of winners) {
             const prizeAmount = BigInt(winner.amount);
@@ -580,15 +586,18 @@ export class PrizeDistributorService {
         return !!(Config.PRIZE_CONTRACT_ADDRESS && Config.OPERATOR_PRIVATE_KEY && this.wallet);
     }
 
-    private getContract() {
-        const provider = OPNetService.getInstance().getProvider();
-        return getContract<IPrizeDistributorContract>(
-            Config.PRIZE_CONTRACT_ADDRESS,
-            PRIZE_DISTRIBUTOR_ABI,
-            provider,
-            Config.NETWORK,
-            this.operatorAddress,
-        );
+    private getContract(): IPrizeDistributorContract {
+        if (!this.cachedPrizeContract) {
+            const provider = OPNetService.getInstance().getProvider();
+            this.cachedPrizeContract = getContract<IPrizeDistributorContract>(
+                Config.PRIZE_CONTRACT_ADDRESS,
+                PRIZE_DISTRIBUTOR_ABI,
+                provider,
+                Config.NETWORK,
+                this.operatorAddress,
+            );
+        }
+        return this.cachedPrizeContract;
     }
 
     private txParams(): TransactionParameters {
