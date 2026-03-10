@@ -10,6 +10,7 @@ import { TournamentService } from '../services/TournamentService.js';
 import { PaymentService } from '../services/PaymentService.js';
 import { PrizeDistributorService } from '../services/PrizeDistributorService.js';
 import { OPNetService } from '../services/OPNetService.js';
+import { RateLimiter, RATE_LIMITS, type RateLimitConfig } from './RateLimiter.js';
 import type {
     GameEvent,
     LeaderboardPeriod,
@@ -58,6 +59,7 @@ export class ApiServer {
     private readonly giveaway: GiveawayService;
     private readonly tournament: TournamentService;
     private readonly payment: PaymentService;
+    private readonly rateLimiter: RateLimiter;
 
     public constructor() {
         this.app = new HyperExpress.Server({
@@ -75,6 +77,7 @@ export class ApiServer {
         this.giveaway    = GiveawayService.getInstance();
         this.tournament  = TournamentService.getInstance();
         this.payment     = PaymentService.getInstance();
+        this.rateLimiter = new RateLimiter(RATE_LIMITS.public);
 
         this.app.set_error_handler(this.onError.bind(this));
         this.setupMiddleware();
@@ -94,17 +97,33 @@ export class ApiServer {
     }
 
     public async stop(): Promise<void> {
+        this.rateLimiter.destroy();
         await this.app.close();
     }
 
     // ── Middleware ───────────────────────────────────────────────────────────
 
     private setupMiddleware(): void {
-        this.app.use((_req, res, next) => {
-            res.header('Access-Control-Allow-Origin', '*');
+        const allowedOrigins = Config.CORS_ORIGINS;
+        const allowAll = allowedOrigins.length === 1 && allowedOrigins[0] === '*';
+
+        this.app.use((req, res, next) => {
+            const origin = req.headers['origin'] ?? '';
+
+            if (allowAll) {
+                res.header('Access-Control-Allow-Origin', '*');
+            } else if (origin && allowedOrigins.includes(origin)) {
+                res.header('Access-Control-Allow-Origin', origin);
+                res.header('Vary', 'Origin');
+            } else if (origin) {
+                // Origin not in allowed list — reject preflight, allow simple requests
+                // (browser will block the response due to missing CORS header)
+            }
+
             res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
             res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Admin-Secret');
-            if (_req.method === 'OPTIONS') {
+
+            if (req.method === 'OPTIONS') {
                 res.status(204).send();
                 return;
             }
@@ -119,92 +138,113 @@ export class ApiServer {
             res.json({ status: 'ok', timestamp: Date.now() });
         });
 
-        this.app.get('/v1/supply', async (_req, res) => {
+        this.app.get('/v1/supply', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.public)) return;
             await this.handleSupply(res);
         });
 
         this.app.get('/v1/nonce/:address', (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.nonce)) return;
             this.handleNonce(req, res);
         });
 
         this.app.post('/v1/session/start', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.session)) return;
             await this.handleSessionStart(req, res);
         });
 
         this.app.post('/v1/session/game', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.session)) return;
             await this.handleCreateGameSession(req, res);
         });
 
         this.app.post('/v1/session/end', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.submit)) return;
             await this.handleSessionEnd(req, res);
         });
 
         this.app.get('/v1/leaderboard/:period', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.public)) return;
             await this.handleLeaderboard(req, res, 'score');
         });
 
         this.app.get('/v1/leaderboard/:period/burn', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.public)) return;
             await this.handleLeaderboard(req, res, 'burned');
         });
 
         this.app.get('/v1/player/:address', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.public)) return;
             await this.handlePlayer(req, res);
         });
 
         // Tournament — public
-        this.app.get('/v1/tournaments', async (_req, res) => {
+        this.app.get('/v1/tournaments', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.public)) return;
             await this.handleGetTournaments(res);
         });
 
         this.app.get('/v1/tournament/:type/leaderboard', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.public)) return;
             await this.handleTournamentLeaderboard(req, res);
         });
 
         this.app.get('/v1/tournament/:type/winners', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.public)) return;
             await this.handleGetLatestWinners(req, res);
         });
 
         this.app.get('/v1/tournament/:type/turns/:address', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.public)) return;
             await this.handleGetRemainingTurns(req, res);
         });
 
         // Tournament — player (Bearer auth)
         this.app.post('/v1/tournament/enter', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.entry)) return;
             await this.handleTournamentEnter(req, res);
         });
 
         // Admin — giveaway
         this.app.post('/v1/admin/giveaway/snapshot', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.admin)) return;
             await this.handleAdminSnapshot(req, res);
         });
 
         this.app.get('/v1/admin/giveaway', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.admin)) return;
             await this.handleAdminListSnapshots(req, res);
         });
 
         this.app.get('/v1/admin/giveaway/:label', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.admin)) return;
             await this.handleAdminGetSnapshot(req, res);
         });
 
         // Admin — tournament fees
         this.app.patch('/v1/admin/tournament/:type/fee', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.admin)) return;
             await this.handleAdminUpdateFee(req, res);
         });
 
         this.app.get('/v1/admin/tournament/:type', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.admin)) return;
             await this.handleAdminGetTournament(req, res);
         });
 
         this.app.get('/v1/admin/prize-distributions', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.admin)) return;
             await this.handleAdminListDistributions(req, res);
         });
 
         // Admin — sponsor bonus deposit & query
         this.app.post('/v1/admin/sponsor-bonus', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.admin)) return;
             await this.handleAdminDepositBonus(req, res);
         });
 
         this.app.get('/v1/admin/sponsor-bonus', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.admin)) return;
             await this.handleAdminGetBonuses(req, res);
         });
     }
@@ -319,7 +359,7 @@ export class ApiServer {
         }
 
         if (Config.DEV_MODE) {
-            const activeCount = (this.sessions as any).sessions?.size ?? '?';
+            const activeCount = this.sessions.activeCount;
             console.log('[ApiServer] endSession request:', {
                 sessionId,
                 playerAddress,
@@ -765,6 +805,24 @@ export class ApiServer {
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    /**
+     * Enforce rate limit for a request. Returns true if the request is allowed.
+     * Sends a 429 response and returns false if rate-limited.
+     */
+    private rateLimit(req: Req, res: Res, config: RateLimitConfig): boolean {
+        const ip = req.ip;
+        const key = `${ip}:${req.path}`;
+        if (!this.rateLimiter.allow(key, config)) {
+            const remaining = this.rateLimiter.remaining(key, config);
+            res.header('Retry-After', String(Math.ceil(config.windowMs / 1000)));
+            res.header('X-RateLimit-Limit', String(config.maxRequests));
+            res.header('X-RateLimit-Remaining', String(remaining));
+            res.status(429).json({ error: 'Too many requests — slow down' });
+            return false;
+        }
+        return true;
+    }
 
     private extractTokenSubject(req: Req): string | null {
         const header = req.headers['authorization'] ?? '';

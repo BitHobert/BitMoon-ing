@@ -2,6 +2,8 @@ import type { NavigateFn, PageName } from '../App';
 import { WalletButton } from './WalletButton';
 import { useBlockHeight } from '../hooks/useBlockHeight';
 import { useWsContext } from '../context/WsContext';
+import { useWalletContext } from '../context/WalletContext';
+import { NETWORK } from '../config/network';
 
 interface Props {
   navigate: NavigateFn;
@@ -11,6 +13,7 @@ interface Props {
 export function TopBar({ navigate }: Props) {
   const blockHeight = useBlockHeight();
   const { supply } = useWsContext();
+  const { networkMismatch, connected } = useWalletContext();
 
   return (
     <header
@@ -38,8 +41,22 @@ export function TopBar({ navigate }: Props) {
         BITMOON'ING
       </div>
 
-      {/* Center: Block tracker */}
+      {/* Center: Network badge + Block tracker */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span
+          className="pixel"
+          style={{
+            fontSize: 7,
+            padding: '2px 6px',
+            borderRadius: 3,
+            border: `1px solid ${NETWORK.color}`,
+            color: NETWORK.color,
+            background: `${NETWORK.color}11`,
+            letterSpacing: 1,
+          }}
+        >
+          {NETWORK.badge}
+        </span>
         {blockHeight && (
           <div
             className="pixel glow-orange"
@@ -73,6 +90,27 @@ export function TopBar({ navigate }: Props) {
 
       {/* Right: Wallet */}
       <WalletButton />
+
+      {/* Network mismatch warning */}
+      {connected && networkMismatch && (
+        <div
+          className="pixel"
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            right: 0,
+            padding: '4px 20px',
+            fontSize: 8,
+            textAlign: 'center',
+            background: 'rgba(255, 60, 60, 0.9)',
+            color: '#fff',
+            zIndex: 51,
+          }}
+        >
+          WALLET IS ON WRONG NETWORK — SWITCH TO {NETWORK.label.toUpperCase()} IN YOUR WALLET
+        </div>
+      )}
     </header>
   );
 }

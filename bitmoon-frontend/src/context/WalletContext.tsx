@@ -1,7 +1,8 @@
-import { createContext, useCallback, useContext, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
 import { useWalletConnect, SupportedWallets } from '@btc-vision/walletconnect';
 import { TransactionFactory, MessageSigner, Address } from '@btc-vision/transaction';
 import { getContract, IOP20Contract, OP_20_ABI } from 'opnet';
+import { IS_MAINNET } from '../config/network';
 
 // ── Public interface (unchanged for consumers) ──────────────────────────────
 
@@ -14,6 +15,8 @@ export interface WalletContextValue {
   connected: boolean;
   connecting: boolean;
   error: string | null;
+  /** True when the wallet is connected to a different network than the app expects */
+  networkMismatch: boolean;
 
   // Actions
   connect: (preferred?: WalletType) => Promise<void>;
@@ -34,6 +37,18 @@ function useWalletAdapter(): WalletContextValue {
   const wc = useWalletConnect();
 
   const connected = !!wc.walletAddress;
+
+  // Detect network mismatch: compare wallet's chainType against expected network
+  const networkMismatch = useMemo(() => {
+    if (!connected || !wc.network) return false;
+    const walletChain = (wc.network as { chainType?: string }).chainType ?? '';
+    if (IS_MAINNET) {
+      // On mainnet build, wallet should be on BITCOIN_MAINNET
+      return walletChain !== 'BITCOIN_MAINNET';
+    }
+    // On testnet build, wallet should be on OPNET_TESTNET
+    return walletChain !== 'OPNET_TESTNET';
+  }, [connected, wc.network]);
 
   const type: WalletType = wc.walletType === 'OP_WALLET'
     ? 'opnet'
@@ -235,6 +250,7 @@ function useWalletAdapter(): WalletContextValue {
     connected,
     connecting: wc.connecting,
     error: null,
+    networkMismatch,
     connect,
     disconnect,
     signMessage,

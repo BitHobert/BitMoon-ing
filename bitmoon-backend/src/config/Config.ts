@@ -64,6 +64,13 @@ export const Config = {
     /** Enable verbose error logging */
     DEV_MODE: process.env['DEV_MODE'] === 'true',
 
+    /**
+     * Allowed CORS origins (comma-separated).
+     * In production: set to your frontend domain(s).
+     * Default '*' allows all origins (dev mode only).
+     */
+    CORS_ORIGINS: (process.env['CORS_ORIGINS'] ?? '*').split(',').map(s => s.trim()),
+
     // ── Tournament fee system ─────────────────────────────────────────────────
 
     /**

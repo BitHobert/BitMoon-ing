@@ -19,6 +19,9 @@ export class GameSessionService {
     /** Active sessions: sessionId → GameSession */
     private readonly sessions: Map<string, GameSession> = new Map();
 
+    /** Number of currently active sessions */
+    public get activeCount(): number { return this.sessions.size; }
+
     /** Supply snapshot per session for anti-cheat replay */
     private readonly sessionSupply: Map<string, bigint> = new Map();
 

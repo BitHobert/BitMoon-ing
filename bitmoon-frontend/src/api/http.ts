@@ -16,8 +16,9 @@ import type {
   TournamentType,
 } from '../types';
 
-const BASE: string =
-  (import.meta.env['VITE_API_BASE_URL'] as string | undefined) ?? '/api';
+import { NETWORK } from '../config/network';
+
+const BASE: string = NETWORK.apiBase;
 
 class ApiError extends Error {
   constructor(
