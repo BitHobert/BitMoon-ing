@@ -309,6 +309,7 @@ export class PrizeDistributorService {
 
         if (top3.length === 0) {
             console.log(`[PrizeDistributorService] No players for ${type}/${periodKey} — carryover will roll forward to next period`);
+            await this.rollForwardBonuses(type, periodKey);
             return; // Don't record a distribution — carryover accumulates for the next period
         }
 
@@ -560,6 +561,47 @@ export class PrizeDistributorService {
         }
 
         return txIds;
+    }
+
+    // ── Sponsor bonus rollforward ────────────────────────────────────────────
+
+    /**
+     * When a tournament period ends with zero players, roll any sponsor bonuses
+     * forward to the next period so sponsors never lose their deposit.
+     */
+    private async rollForwardBonuses(type: TournamentType, periodKey: string): Promise<void> {
+        const bonuses = await this.sponsorBonuses
+            .find({ tournamentType: type, tournamentKey: periodKey })
+            .toArray();
+
+        if (bonuses.length === 0) return;
+
+        // Compute the next period's key by adding one full cycle to the current start block
+        const { cycle } = TournamentService.durationFor(type);
+        const nextKey = (BigInt(periodKey) + cycle).toString();
+
+        // Count existing bonuses in the target period so slotIndexes don't collide
+        const existingCount = await this.sponsorBonuses.countDocuments({
+            tournamentType: type,
+            tournamentKey: nextKey,
+        });
+
+        const docs = bonuses.map((b, i) => ({
+            _id:            randomUUID(),
+            tournamentType: type,
+            tournamentKey:  nextKey,
+            tokenAddress:   b.tokenAddress,
+            tokenSymbol:    b.tokenSymbol,
+            amount:         b.amount,
+            slotIndex:      existingCount + i,
+            txHash:         'rolled-forward',
+            depositedAt:    Date.now(),
+        }));
+
+        await this.sponsorBonuses.insertMany(docs);
+        console.log(
+            `[PrizeDistributorService] Rolled forward ${bonuses.length} sponsor bonus(es) from ${type}/${periodKey} → ${type}/${nextKey}`,
+        );
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────

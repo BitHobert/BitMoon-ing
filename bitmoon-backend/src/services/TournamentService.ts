@@ -78,7 +78,7 @@ export class TournamentService {
     /**
      * Returns the active block counts and cycle length for each tournament type.
      */
-    private static durationFor(type: TournamentType): { active: bigint; cycle: bigint } {
+    public static durationFor(type: TournamentType): { active: bigint; cycle: bigint } {
         const gap = Config.TOURNAMENT_GAP_BLOCKS;
         switch (type) {
             case 'daily':   return { active: Config.DAILY_ACTIVE_BLOCKS,   cycle: Config.DAILY_ACTIVE_BLOCKS   + gap };

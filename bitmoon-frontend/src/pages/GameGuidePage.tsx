@@ -329,8 +329,25 @@ export function GameGuidePage({ navigate }: Props) {
           <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 8, color: 'var(--color-orange)', marginBottom: 4 }}>
             SPONSOR BONUSES
           </div>
-          <div style={{ fontSize: 9, color: 'var(--color-text-dim)' }}>
-            Sponsors can deposit bonus tokens into any tournament period. These bonuses are added on top of the regular prize pool and awarded to the 1st place winner. Sponsor slots are limited to 50 per period.
+          <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginBottom: 8 }}>
+            Sponsors can boost any tournament by depositing bonus tokens into a specific period.
+            These bonuses are stacked on top of the regular prize pool, making the pot bigger for everyone.
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {[
+              { icon: '💰', text: 'Bonus tokens are added on top of entry fee pools — they increase the total prize without taking from players.' },
+              { icon: '🏆', text: 'Sponsor bonuses are awarded to the 1st place winner along with their regular 70% share.' },
+              { icon: '🔄', text: 'If nobody plays a sponsored period, all bonuses automatically roll forward to the next period. Sponsors never lose their deposit.' },
+            ].map(item => (
+              <div key={item.icon} style={{
+                display: 'flex', alignItems: 'flex-start', gap: 6,
+                padding: '4px 8px', borderRadius: 3,
+                background: 'var(--color-bg)', border: '1px solid var(--color-border)',
+              }}>
+                <span style={{ fontSize: 10, flexShrink: 0 }}>{item.icon}</span>
+                <span style={{ fontSize: 8, color: 'var(--color-text-dim)' }}>{item.text}</span>
+              </div>
+            ))}
           </div>
         </div>
       </section>
