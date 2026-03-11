@@ -264,6 +264,8 @@ export interface PrizeDistribution {
     readonly btcTxIds?: string[];
     /** OP-20 token transfer transaction IDs (one per winner, when token prizes enabled) */
     readonly tokenTxIds?: string[];
+    /** Transaction ID of the 5 % dev cut transfer to DEV_WALLET_ADDRESS (if sent) */
+    readonly devCutTxId?: string;
 }
 
 // ─── Sponsor Bonus ────────────────────────────────────────────────────────────

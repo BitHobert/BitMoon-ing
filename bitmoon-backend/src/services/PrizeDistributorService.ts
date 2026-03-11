@@ -12,7 +12,7 @@ import {
     type IPrizeDistributorContract,
     type SponsorBonusDepositedEventData,
 } from '../contracts/PrizeDistributorABI.js';
-import type { PrizeDistribution, SponsorBonus, TournamentType } from '../types/index.js';
+import type { PrizeDistribution, SponsorBonus, TournamentEntry, TournamentType } from '../types/index.js';
 
 type DistributionDoc = PrizeDistribution;
 
@@ -29,6 +29,7 @@ export class PrizeDistributorService {
 
     private distributions!: Collection<DistributionDoc>;
     private sponsorBonuses!: Collection<SponsorBonus>;
+    private entries!: Collection<TournamentEntry>;
     private wallet!: Wallet;
     private operatorAddress!: Address;
     private watcherTimer: ReturnType<typeof setTimeout> | null = null;
@@ -54,6 +55,8 @@ export class PrizeDistributorService {
             { tournamentType: 1, tournamentKey: 1 },
             { unique: true, name: 'unique_distribution_per_period' },
         );
+
+        this.entries = db.collection<TournamentEntry>('tournament_entries');
 
         this.sponsorBonuses = db.collection<SponsorBonus>('sponsor_bonuses');
         await this.sponsorBonuses.createIndex(
@@ -389,6 +392,16 @@ export class PrizeDistributorService {
             }
         }
 
+        // ── Dev cut transfer ────────────────────────────────────────────────
+        // Send accumulated 5 % dev fees to the separate DEV_WALLET_ADDRESS.
+        // Non-blocking — failure does not prevent distribution from being recorded.
+        let devCutTxId: string | null = null;
+        try {
+            devCutTxId = await this.sendDevCut(type, periodKey);
+        } catch (err) {
+            console.error('[PrizeDistributorService] Dev cut transfer failed:', err);
+        }
+
         const doc: PrizeDistribution = {
             _id:            randomUUID(),
             tournamentType: type,
@@ -400,6 +413,7 @@ export class PrizeDistributorService {
             blockNumber:    prizeBlock.toString(),
             btcTxIds,
             tokenTxIds,
+            ...(devCutTxId ? { devCutTxId } : {}),
         };
 
         try {
@@ -561,6 +575,91 @@ export class PrizeDistributorService {
         }
 
         return txIds;
+    }
+
+    // ── Dev wallet cut ──────────────────────────────────────────────────────
+
+    /**
+     * Send the accumulated 5 % dev cut for a tournament period to the
+     * DEV_WALLET_ADDRESS configured in the environment.
+     *
+     * Sums all `devAmount` fields from verified entries in that period and
+     * transfers the total as an OP-20 token transfer from the operator wallet.
+     *
+     * If DEV_WALLET_ADDRESS is empty or equals the operator address, the cut
+     * stays where it is and no transfer is made.
+     */
+    private async sendDevCut(
+        type: TournamentType,
+        periodKey: string,
+    ): Promise<string | null> {
+        const devWallet = Config.DEV_WALLET_ADDRESS;
+        if (!devWallet) {
+            console.log('[PrizeDistributorService] No DEV_WALLET_ADDRESS set — dev cut stays in operator wallet');
+            return null;
+        }
+
+        // Don't transfer to yourself (would waste gas)
+        const operatorAddr = Config.OPERATOR_P2TR_ADDRESS || this.wallet?.p2tr || '';
+        if (devWallet === operatorAddr) {
+            console.log('[PrizeDistributorService] DEV_WALLET_ADDRESS matches operator — skipping self-transfer');
+            return null;
+        }
+
+        if (!Config.ENTRY_TOKEN_ADDRESS) {
+            console.warn('[PrizeDistributorService] No ENTRY_TOKEN_ADDRESS — cannot send dev cut');
+            return null;
+        }
+
+        // Sum all devAmount from verified entries for this period
+        const entryCursor = this.entries.find({
+            tournamentType: type,
+            tournamentKey: periodKey,
+            isVerified: true,
+        });
+
+        let totalDevCut = 0n;
+        for await (const entry of entryCursor) {
+            totalDevCut += BigInt(entry.devAmount || '0');
+        }
+
+        if (totalDevCut <= 0n) {
+            console.log(`[PrizeDistributorService] Dev cut for ${type}/${periodKey} is 0 — nothing to send`);
+            return null;
+        }
+
+        console.log(
+            `[PrizeDistributorService] Sending dev cut: ${totalDevCut} raw units → ${devWallet} (${type}/${periodKey})`,
+        );
+
+        try {
+            // Reuse cached OP-20 contract
+            if (!this.cachedTokenContract) {
+                const provider = OPNetService.getInstance().getProvider();
+                this.cachedTokenContract = getContract<IOP20Contract>(
+                    Address.fromString(Config.ENTRY_TOKEN_ADDRESS),
+                    OP_20_ABI,
+                    provider,
+                    Config.NETWORK,
+                    this.operatorAddress,
+                );
+            }
+
+            const recipientAddress = await this.resolveAddress(devWallet);
+            const sim = await this.cachedTokenContract.transfer(recipientAddress, totalDevCut);
+
+            if (sim.revert) {
+                console.error(`[PrizeDistributorService] Dev cut transfer reverted: ${sim.revert}`);
+                return null;
+            }
+
+            const receipt = await sim.sendTransaction(this.txParams());
+            console.log(`[PrizeDistributorService] Dev cut sent: tx ${receipt.transactionId}`);
+            return receipt.transactionId;
+        } catch (err) {
+            console.error('[PrizeDistributorService] Dev cut transfer failed:', err);
+            return null;
+        }
     }
 
     // ── Sponsor bonus rollforward ────────────────────────────────────────────

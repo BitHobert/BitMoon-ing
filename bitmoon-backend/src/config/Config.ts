@@ -106,6 +106,13 @@ export const Config = {
     OPERATOR_P2TR_ADDRESS: process.env['OPERATOR_P2TR_ADDRESS'] ?? '',
 
     /**
+     * Wallet address that receives the 5 % dev cut from every tournament entry fee.
+     * Must be a bech32 wallet address (opt1p...).
+     * If empty, the dev cut stays in the operator wallet (no separate transfer).
+     */
+    DEV_WALLET_ADDRESS: process.env['DEV_WALLET_ADDRESS'] ?? '',
+
+    /**
      * How often (ms) the prize watcher polls OPNet for prizeBlock arrival.
      * Default: 30 seconds.
      */
