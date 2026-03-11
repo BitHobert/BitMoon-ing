@@ -277,8 +277,7 @@ export class PrizeDistributorService {
     }
 
     private async runWatchCycle(): Promise<void> {
-        const provider     = OPNetService.getInstance().getProvider();
-        const currentBlock = await provider.getBlockNumber();
+        const currentBlock = await OPNetService.getInstance().getBlockNumber();
         const ts           = TournamentService.getInstance();
         const types: TournamentType[] = ['daily', 'weekly', 'monthly'];
 

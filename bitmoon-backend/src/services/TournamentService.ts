@@ -144,8 +144,7 @@ export class TournamentService {
      * Fetch the current block from OPNet and compute the tournament period.
      */
     public async getCurrentPeriod(type: TournamentType): Promise<TournamentPeriod> {
-        const provider     = OPNetService.getInstance().getProvider();
-        const currentBlock = await provider.getBlockNumber();
+        const currentBlock = await OPNetService.getInstance().getBlockNumber();
         return this.computePeriod(type, currentBlock);
     }
 
@@ -335,8 +334,7 @@ export class TournamentService {
     // ── Aggregations ───────────────────────────────────────────────────────────
 
     public async getActiveTournaments(): Promise<TournamentInfo[]> {
-        const provider     = OPNetService.getInstance().getProvider();
-        const currentBlock = await provider.getBlockNumber();
+        const currentBlock = await OPNetService.getInstance().getBlockNumber();
         const types: TournamentType[] = ['daily', 'weekly', 'monthly'];
 
         return Promise.all(

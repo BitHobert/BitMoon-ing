@@ -461,8 +461,7 @@ export class ApiServer {
         );
 
         // Include the current OPNet block so the frontend can display countdown
-        const provider     = OPNetService.getInstance().getProvider();
-        const currentBlock = await provider.getBlockNumber();
+        const currentBlock = await OPNetService.getInstance().getBlockNumber();
         res.json({ tournaments: enriched, currentBlock: currentBlock.toString() });
     }
 
