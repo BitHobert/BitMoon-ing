@@ -526,7 +526,7 @@ export function HomePage({ navigate }: Props) {
               If fewer than 3 players enter, the split adjusts automatically. Unclaimed pools roll over to the next period.
             </div>
             <div style={{ fontSize: 13, color: 'var(--color-text-dim)', marginTop: 8 }}>
-              If you're mid-game when a tournament ends, your score still counts — as long as your session started before the tournament ended, your entry is valid.
+              Your score is locked to whichever tournament is active when you finish playing. If a period ends mid-game, your score automatically counts toward the next tournament. Unplayed turns and fees carry over.
             </div>
           </div>
 
@@ -540,7 +540,7 @@ export function HomePage({ navigate }: Props) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {[
                 { icon: '⏳', text: 'When you buy turns, your fee enters the Pending Pool — visible to everyone.' },
-                { icon: '🎮', text: 'Each time you play, that turn\'s share moves from Pending into Prize Pool (80%), Next Period (15%), and Dev (5%).' },
+                { icon: '🎮', text: 'Each time you play, that turn\'s share moves from Pending into the prize pool.' },
                 { icon: '🔄', text: 'Unplayed turns roll forward automatically. Your money stays in the Pending Pool until you play.' },
               ].map(r => (
                 <div key={r.text} style={{
@@ -560,7 +560,7 @@ export function HomePage({ navigate }: Props) {
               SPONSOR BONUSES
             </div>
             <div style={{ fontSize: 13, color: 'var(--color-text-dim)' }}>
-              Sponsors can deposit bonus tokens into any tournament period. These bonuses are added on top of the regular prize pool and awarded to the 1st place winner. Sponsor slots are limited to 50 per period.
+              Sponsors can donate bonus tokens into any tournament period. These bonuses are added on top of the regular prize pool and awarded to the 1st place winner.
             </div>
           </div>
 
@@ -576,7 +576,7 @@ export function HomePage({ navigate }: Props) {
                 { icon: '🎮', text: 'Each entry fee = 1 play turn' },
                 { icon: '🔄', text: 'Buy more turns anytime to stack on top of remaining' },
                 { icon: '🔁', text: 'Unplayed turns automatically roll to the next period' },
-                { icon: '📅', text: 'New purchases cut off near period end, but existing turns still playable' },
+                { icon: '📅', text: 'Turns carry over — if you don\'t play, your entry rolls to the next period automatically' },
               ].map(r => (
                 <div key={r.text} style={{
                   display: 'flex', alignItems: 'flex-start', gap: 8,

@@ -317,23 +317,11 @@ export function TournamentDetailPage({ navigate, ctx }: Props) {
         onClick={() => navigate('tournament-entry', { tournamentType })}
         disabled={!info.isActive}
       >
-        {!info.isActive
-          ? 'WAITING FOR NEXT ROUND…'
-          : info.isPurchaseOpen === false
-            ? 'PLAY REMAINING TURNS (ENTRIES CLOSED)'
-            : `ENTER TOURNAMENT — ${feeDisplay} LFGT`
+        {info.isActive
+          ? `ENTER TOURNAMENT — ${feeDisplay} LFGT`
+          : 'WAITING FOR NEXT ROUND…'
         }
       </button>
-
-      {/* Purchase deadline notice */}
-      {info.isActive && info.isPurchaseOpen === false && (
-        <div style={{
-          textAlign: 'center', fontFamily: 'var(--font-pixel)', fontSize: 8,
-          color: '#ffd700', padding: '4px 0',
-        }}>
-          NEW ENTRIES CLOSED — PURCHASE DEADLINE PASSED (BLOCK {Number(info.purchaseDeadlineBlock).toLocaleString()})
-        </div>
-      )}
 
       {/* Next round notice */}
       {!info.isActive && (

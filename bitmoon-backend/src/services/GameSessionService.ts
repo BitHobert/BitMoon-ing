@@ -47,6 +47,11 @@ export class GameSessionService {
      * the player's entry. Throws 403 if no turns remain.
      * Snapshots the current game supply for accurate server-side scoring.
      *
+     * NOTE: The session stores only `tournamentType`, NOT `tournamentKey`.
+     * The key is resolved at score-submission time (endSession) so the score
+     * always lands in whichever period is active when the player dies.
+     * This avoids edge cases where a game spans a period boundary.
+     *
      * Returns the session plus turnsRemaining (for tournament sessions).
      */
     public async createSession(
@@ -54,12 +59,11 @@ export class GameSessionService {
         tournamentType?: TournamentType,
     ): Promise<GameSession & { turnsRemaining?: number }> {
         // Tournament entry gate — consume one turn atomically
-        let tournamentKey: string | undefined;
         let turnsRemaining: number | undefined;
         if (tournamentType !== undefined) {
             const ts = TournamentService.getInstance();
-            // getTournamentKey() throws 404 if currently in the inter-period gap
-            tournamentKey = await ts.getTournamentKey(tournamentType);
+            // getTournamentKey() returns the current or next period key
+            const tournamentKey = await ts.getTournamentKey(tournamentType);
             // Catch up any stranded entries from past periods before consuming a turn
             await ts.catchUpRollovers(playerAddress, tournamentType, tournamentKey);
             const turns = await ts.consumeTurn(playerAddress, tournamentType, tournamentKey);
@@ -77,8 +81,8 @@ export class GameSessionService {
             startedAt: now,
             expiresAt: now + Config.SESSION_TTL_MS,
             isActive: true,
-            ...(tournamentType !== undefined ? { tournamentType }              : {}),
-            ...(tournamentKey  !== undefined ? { tournamentKey: tournamentKey } : {}),
+            ...(tournamentType !== undefined ? { tournamentType } : {}),
+            // tournamentKey is NOT stored here — resolved at endSession time
         };
 
         const supplyAtStart = await this.gameSupply.getSupplyAtSessionStart();
@@ -139,11 +143,23 @@ export class GameSessionService {
             initialSupply,
         );
 
-        // Attach tournament context from the session
+        // Resolve tournament key NOW (at score submission time) so the score
+        // always lands in whichever period is current when the player finishes.
+        let resolvedKey: string | undefined;
+        if (session.tournamentType !== undefined) {
+            try {
+                const ts = TournamentService.getInstance();
+                resolvedKey = await ts.getTournamentKey(session.tournamentType);
+            } catch {
+                // If getTournamentKey fails (shouldn't normally), fall back gracefully
+                resolvedKey = undefined;
+            }
+        }
+
         const result: ScoreResult = {
             ...simResult,
             ...(session.tournamentType !== undefined ? { tournamentType: session.tournamentType } : {}),
-            ...(session.tournamentKey  !== undefined ? { tournamentKey:  session.tournamentKey  } : {}),
+            ...(resolvedKey            !== undefined ? { tournamentKey:  resolvedKey }             : {}),
         };
 
         this.sessions.delete(req.sessionId);

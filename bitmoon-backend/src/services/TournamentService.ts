@@ -23,8 +23,6 @@ export interface TournamentPeriod {
     readonly prizeBlock:           bigint;  // endsAtBlock + 1
     readonly nextStartBlock:       bigint;  // endsAtBlock + GAP + 1
     readonly isActive:             boolean; // currentBlock is within [startsAtBlock, endsAtBlock]
-    readonly purchaseDeadlineBlock: bigint;  // endsAtBlock - PURCHASE_DEADLINE_OFFSET
-    readonly isPurchaseOpen:       boolean; // currentBlock < purchaseDeadlineBlock
 }
 
 /**
@@ -112,10 +110,6 @@ export class TournamentService {
 
         const isActive = currentBlock >= startsAtBlock && currentBlock <= endsAtBlock;
 
-        // Purchase deadline: no new entry purchases after this block
-        const purchaseDeadlineBlock = endsAtBlock - Config.PURCHASE_DEADLINE_OFFSET;
-        const isPurchaseOpen = currentBlock < purchaseDeadlineBlock;
-
         return {
             tournamentKey:  startsAtBlock.toString(),
             startsAtBlock,
@@ -123,8 +117,6 @@ export class TournamentService {
             prizeBlock,
             nextStartBlock,
             isActive,
-            purchaseDeadlineBlock,
-            isPurchaseOpen,
         };
     }
 
@@ -160,15 +152,19 @@ export class TournamentService {
      * Returns the tournament key (start block string) for the current period.
      * Throws if the current block is in the inter-tournament gap.
      */
+    /**
+     * Returns the tournament key to use for gameplay.
+     * - If the current period is active, returns its key.
+     * - If we're in the gap between periods, returns the NEXT period's key
+     *   so players can still use rolled-over turns (scores count toward next tournament).
+     */
     public async getTournamentKey(type: TournamentType): Promise<string> {
         const period = await this.getCurrentPeriod(type);
-        if (!period.isActive) {
-            throw Object.assign(
-                new Error(`No active ${type} tournament right now (in gap between periods)`),
-                { statusCode: 404 },
-            );
-        }
-        return period.tournamentKey;
+        if (period.isActive) return period.tournamentKey;
+
+        // In the gap — use the next period's key so rolled-over turns
+        // are consumed against the upcoming tournament.
+        return period.nextStartBlock.toString();
     }
 
     // ── Fee config ─────────────────────────────────────────────────────────────
@@ -580,8 +576,6 @@ export class TournamentService {
                     prizeBlock:      period.prizeBlock.toString(),
                     nextStartBlock:  period.nextStartBlock.toString(),
                     isActive:        period.isActive,
-                    purchaseDeadlineBlock: period.purchaseDeadlineBlock.toString(),
-                    isPurchaseOpen:       period.isPurchaseOpen,
                 } satisfies TournamentInfo;
             }),
         );

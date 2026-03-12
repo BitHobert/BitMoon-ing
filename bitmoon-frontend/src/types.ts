@@ -43,8 +43,6 @@ export interface TournamentInfo {
   readonly prizeBlock: string;
   readonly nextStartBlock: string;
   readonly isActive: boolean;
-  readonly purchaseDeadlineBlock: string;
-  readonly isPurchaseOpen: boolean;
   readonly pendingPool: string;
   readonly sponsorBonuses?: ReadonlyArray<{ readonly tokenAddress: string; readonly tokenSymbol: string; readonly amount: string }>;
 }

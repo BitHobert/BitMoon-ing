@@ -165,16 +165,9 @@ export const Config = {
     /**
      * Gap between end of one tournament and start of the next (in blocks).
      * Prize is sent at endBlock+1; next tournament begins at endBlock+GAP+1.
-     * TEST MODE: 2 blocks (~20 min) — enough for watcher to poll & distribute.
+     * TEST MODE: 4 blocks — enough for watcher to poll & distribute.
      */
-    TOURNAMENT_GAP_BLOCKS: 2n,
-
-    /**
-     * Number of blocks before endsAtBlock when new entry purchases are cut off.
-     * Players can still play their remaining turns during this window.
-     * purchaseDeadlineBlock = endsAtBlock - PURCHASE_DEADLINE_OFFSET
-     */
-    PURCHASE_DEADLINE_OFFSET: 2n,
+    TOURNAMENT_GAP_BLOCKS: 4n,
 
     // ── Fee split ratios (basis points, total = 10 000) ───────────────────────
     /** 5 % → developer wallet */

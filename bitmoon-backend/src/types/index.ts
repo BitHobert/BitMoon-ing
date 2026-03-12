@@ -250,10 +250,6 @@ export interface TournamentInfo {
     readonly nextStartBlock: string;
     /** Whether the current block is within this period's active range */
     readonly isActive: boolean;
-    /** Block after which new entry purchases are no longer accepted (as string) */
-    readonly purchaseDeadlineBlock: string;
-    /** Whether new entries can still be purchased (currentBlock < purchaseDeadlineBlock) */
-    readonly isPurchaseOpen: boolean;
     /**
      * Total tokens sitting in the "pending" (unplayed) pool for this period (as string).
      * This is the sum of feePerTurn × turnsRemaining across all entries.

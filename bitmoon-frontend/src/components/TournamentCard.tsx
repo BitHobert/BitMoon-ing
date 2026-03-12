@@ -142,7 +142,7 @@ export function TournamentCard({ info, navigate, playerRank }: Props) {
           <span style={{ color: 'var(--color-text)' }}>{info.entrantCount}</span> PLAYS · <span style={{ color: 'var(--color-text)' }}>{feeDisplay}</span> LFGT ENTRY FEE
         </div>
         <div>
-          TOURNAMENT END BLOCK <span style={{ color: 'var(--color-text)' }}>{Number(endBlock).toLocaleString()}</span>
+          END BLOCK <span style={{ color: 'var(--color-text)' }}>{Number(endBlock).toLocaleString()}</span>
         </div>
       </div>
 
@@ -182,12 +182,7 @@ export function TournamentCard({ info, navigate, playerRank }: Props) {
           onClick={() => navigate('tournament-entry', { tournamentType: info.tournamentType })}
           disabled={!info.isActive}
         >
-          {!info.isActive
-            ? 'WAITING…'
-            : info.isPurchaseOpen === false
-              ? 'PLAY (ENTRIES CLOSED)'
-              : 'ENTER'
-          }
+          {info.isActive ? 'ENTER' : 'WAITING…'}
         </button>
       </div>
     </div>

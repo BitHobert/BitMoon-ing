@@ -504,18 +504,12 @@ export class ApiServer {
             return;
         }
 
-        // Resolve current period and enforce purchase deadline
+        // Resolve current period — new purchases only allowed while active
         let key: string;
         try {
             const period = await this.tournament.getCurrentPeriod(tournamentType);
             if (!period.isActive) {
                 res.status(404).json({ error: `No active ${tournamentType} tournament right now (in gap between periods)` });
-                return;
-            }
-            if (!period.isPurchaseOpen) {
-                res.status(403).json({
-                    error: `Purchase window has closed. You can still play remaining turns until block ${period.endsAtBlock.toString()}`,
-                });
                 return;
             }
             key = period.tournamentKey;
@@ -699,8 +693,6 @@ export class ApiServer {
             prizeBlock:      period.prizeBlock.toString(),
             nextStartBlock:  period.nextStartBlock.toString(),
             isActive:        period.isActive,
-            purchaseDeadlineBlock: period.purchaseDeadlineBlock.toString(),
-            isPurchaseOpen:       period.isPurchaseOpen,
         });
     }
 
