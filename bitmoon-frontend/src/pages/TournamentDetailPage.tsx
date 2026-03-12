@@ -198,6 +198,25 @@ export function TournamentDetailPage({ navigate, ctx }: Props) {
           )}
         </div>
 
+        {/* Pending pool */}
+        {BigInt(info.pendingPool || '0') > 0n && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '6px 12px', borderRadius: 3, marginBottom: 12,
+            background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.25)',
+          }}>
+            <span style={{ fontSize: 12 }}>⏳</span>
+            <div>
+              <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 8, color: '#ffd700' }}>
+                {formatTokens(info.pendingPool)} LFGT PENDING
+              </div>
+              <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 6, color: 'var(--color-text-dim)', marginTop: 2 }}>
+                MOVES TO PRIZE POOL WHEN PLAYED
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Sponsor bonuses */}
         {info.sponsorBonuses && info.sponsorBonuses.length > 0 && (() => {
           const bySymbol = new Map<string, bigint>();
@@ -298,8 +317,23 @@ export function TournamentDetailPage({ navigate, ctx }: Props) {
         onClick={() => navigate('tournament-entry', { tournamentType })}
         disabled={!info.isActive}
       >
-        {info.isActive ? `ENTER TOURNAMENT — ${feeDisplay} LFGT` : 'WAITING FOR NEXT ROUND…'}
+        {!info.isActive
+          ? 'WAITING FOR NEXT ROUND…'
+          : info.isPurchaseOpen === false
+            ? 'PLAY REMAINING TURNS (ENTRIES CLOSED)'
+            : `ENTER TOURNAMENT — ${feeDisplay} LFGT`
+        }
       </button>
+
+      {/* Purchase deadline notice */}
+      {info.isActive && info.isPurchaseOpen === false && (
+        <div style={{
+          textAlign: 'center', fontFamily: 'var(--font-pixel)', fontSize: 8,
+          color: '#ffd700', padding: '4px 0',
+        }}>
+          NEW ENTRIES CLOSED — PURCHASE DEADLINE PASSED (BLOCK {Number(info.purchaseDeadlineBlock).toLocaleString()})
+        </div>
+      )}
 
       {/* Next round notice */}
       {!info.isActive && (

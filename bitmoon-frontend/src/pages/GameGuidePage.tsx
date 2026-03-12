@@ -327,6 +327,31 @@ export function GameGuidePage({ navigate }: Props) {
 
         <div style={infoBlock}>
           <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 8, color: 'var(--color-orange)', marginBottom: 4 }}>
+            PENDING POOL
+          </div>
+          <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginBottom: 8 }}>
+            Entry fees don't go straight into the prize pool. They sit in a visible "Pending Pool" until you actually play.
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {[
+              { icon: '⏳', text: 'When you buy turns, your fee enters the Pending Pool — visible to everyone.' },
+              { icon: '🎮', text: 'Each time you play a turn, that turn\'s share moves from Pending into the Prize Pool (80%), Next Period (15%), and Dev (5%).' },
+              { icon: '🔄', text: 'Unplayed turns roll forward to the next period automatically. Your money stays in the Pending Pool until you play.' },
+            ].map(item => (
+              <div key={item.text} style={{
+                display: 'flex', alignItems: 'flex-start', gap: 6,
+                padding: '4px 8px', borderRadius: 3,
+                background: 'var(--color-bg)', border: '1px solid var(--color-border)',
+              }}>
+                <span style={{ fontSize: 10, flexShrink: 0 }}>{item.icon}</span>
+                <span style={{ fontSize: 8, color: 'var(--color-text-dim)' }}>{item.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={infoBlock}>
+          <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 8, color: 'var(--color-orange)', marginBottom: 4 }}>
             SPONSOR BONUSES
           </div>
           <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginBottom: 8 }}>
@@ -339,7 +364,32 @@ export function GameGuidePage({ navigate }: Props) {
               { icon: '🏆', text: 'Sponsor bonuses are awarded to the 1st place winner along with their regular 70% share.' },
               { icon: '🔄', text: 'If nobody plays a sponsored period, all bonuses automatically roll forward to the next period. Sponsors never lose their deposit.' },
             ].map(item => (
-              <div key={item.icon} style={{
+              <div key={item.text} style={{
+                display: 'flex', alignItems: 'flex-start', gap: 6,
+                padding: '4px 8px', borderRadius: 3,
+                background: 'var(--color-bg)', border: '1px solid var(--color-border)',
+              }}>
+                <span style={{ fontSize: 10, flexShrink: 0 }}>{item.icon}</span>
+                <span style={{ fontSize: 8, color: 'var(--color-text-dim)' }}>{item.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={infoBlock}>
+          <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 8, color: 'var(--color-orange)', marginBottom: 4 }}>
+            TURN ROLLOVER
+          </div>
+          <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginBottom: 8 }}>
+            Bought turns but didn't play them all? No worries — they carry forward automatically.
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {[
+              { icon: '🔁', text: 'Unplayed turns automatically roll to the next tournament period of the same type.' },
+              { icon: '💰', text: 'Your pending fees stay intact — they only enter the prize pool when you play.' },
+              { icon: '📅', text: 'New entries are cut off near the end of each period (purchase deadline), but you can still play existing turns.' },
+            ].map(item => (
+              <div key={item.text} style={{
                 display: 'flex', alignItems: 'flex-start', gap: 6,
                 padding: '4px 8px', borderRadius: 3,
                 background: 'var(--color-bg)', border: '1px solid var(--color-border)',

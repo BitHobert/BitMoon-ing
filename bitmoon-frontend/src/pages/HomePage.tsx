@@ -188,6 +188,12 @@ export function HomePage({ navigate }: Props) {
                       <span style={{ color: 'var(--color-text)' }}>{info.entrantCount}</span> PLAYS
                       <span style={{ margin: '0 6px' }}>·</span>
                       <span style={{ color: 'var(--color-text)' }}>{formatTokens(info.entryFee)}</span> ENTRY
+                      {BigInt(info.pendingPool || '0') > 0n && (
+                        <>
+                          <span style={{ margin: '0 6px' }}>·</span>
+                          <span style={{ color: '#ffd700' }}>⏳ {formatTokens(info.pendingPool)} PENDING</span>
+                        </>
+                      )}
                     </div>
                     {info.sponsorBonuses && info.sponsorBonuses.length > 0 && (() => {
                       const bySymbol = new Map<string, bigint>();
@@ -526,6 +532,31 @@ export function HomePage({ navigate }: Props) {
 
           <div style={infoBlock}>
             <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 12, color: 'var(--color-orange)', marginBottom: 4 }}>
+              PENDING POOL
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--color-text-dim)', marginBottom: 8 }}>
+              Entry fees don't go straight into the prize pool. They sit in a visible "Pending Pool" until you actually play.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {[
+                { icon: '⏳', text: 'When you buy turns, your fee enters the Pending Pool — visible to everyone.' },
+                { icon: '🎮', text: 'Each time you play, that turn\'s share moves from Pending into Prize Pool (80%), Next Period (15%), and Dev (5%).' },
+                { icon: '🔄', text: 'Unplayed turns roll forward automatically. Your money stays in the Pending Pool until you play.' },
+              ].map(r => (
+                <div key={r.text} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 8,
+                  padding: '4px 10px', borderRadius: 3,
+                  background: 'var(--color-bg)', border: '1px solid var(--color-border)',
+                }}>
+                  <span style={{ fontSize: 12, flexShrink: 0 }}>{r.icon}</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--font-pixel)', color: 'var(--color-text-dim)' }}>{r.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={infoBlock}>
+            <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 12, color: 'var(--color-orange)', marginBottom: 4 }}>
               SPONSOR BONUSES
             </div>
             <div style={{ fontSize: 13, color: 'var(--color-text-dim)' }}>
@@ -535,22 +566,24 @@ export function HomePage({ navigate }: Props) {
 
           <div style={infoBlock}>
             <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 12, color: 'var(--color-orange)', marginBottom: 4 }}>
-              TURNS & RE-ENTRY
+              TURNS & ROLLOVER
             </div>
             <div style={{ fontSize: 13, color: 'var(--color-text-dim)' }}>
-              Each entry fee purchase gives you play turns. Use them whenever you want during the purchased tournament period. Re-entering gameplay results in re-signing and tx.
+              Each entry fee purchase gives you play turns. Use them whenever you want during the tournament period.
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
               {[
                 { icon: '🎮', text: 'Each entry fee = 1 play turn' },
                 { icon: '🔄', text: 'Buy more turns anytime to stack on top of remaining' },
+                { icon: '🔁', text: 'Unplayed turns automatically roll to the next period' },
+                { icon: '📅', text: 'New purchases cut off near period end, but existing turns still playable' },
               ].map(r => (
                 <div key={r.text} style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
+                  display: 'flex', alignItems: 'flex-start', gap: 8,
                   padding: '4px 10px', borderRadius: 3,
                   background: 'var(--color-bg)', border: '1px solid var(--color-border)',
                 }}>
-                  <span style={{ fontSize: 12 }}>{r.icon}</span>
+                  <span style={{ fontSize: 12, flexShrink: 0 }}>{r.icon}</span>
                   <span style={{ fontSize: 12, fontFamily: 'var(--font-pixel)', color: 'var(--color-text-dim)' }}>{r.text}</span>
                 </div>
               ))}

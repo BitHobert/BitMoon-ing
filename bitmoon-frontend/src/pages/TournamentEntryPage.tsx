@@ -191,7 +191,22 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
           <Detail label="ENTRY FEE"   value={`${feeTokens} ${tokenLabel}`}  color={color} />
           <Detail label="PLAYERS"     value={String(tournament.entrantCount)} color="var(--color-text)" />
           <Detail label="YOUR WALLET" value={shortAddr(wallet.address ?? '')} color="var(--color-text-dim)" />
+          {BigInt(tournament.pendingPool || '0') > 0n && (
+            <Detail label="PENDING POOL" value={`${fmtTokens(tournament.pendingPool)} ${tokenLabel}`} color="#ffd700" />
+          )}
         </div>
+
+        {/* Purchase deadline warning */}
+        {tournament.isPurchaseOpen === false && (
+          <div style={{
+            background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.3)',
+            borderRadius: 3, padding: '8px 12px', marginBottom: 16,
+            fontFamily: 'var(--font-pixel)', fontSize: 8, color: '#ffd700',
+            textAlign: 'center', lineHeight: 2,
+          }}>
+            NEW ENTRIES CLOSED — PURCHASE DEADLINE PASSED
+          </div>
+        )}
 
         {/* Step content */}
         {step === 'review' && (

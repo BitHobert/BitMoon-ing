@@ -122,6 +122,20 @@ export function TournamentCard({ info, navigate, playerRank }: Props) {
         })()}
       </div>
 
+      {/* Pending pool */}
+      {BigInt(info.pendingPool || '0') > 0n && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '4px 8px', borderRadius: 3,
+          background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.2)',
+        }}>
+          <span style={{ fontSize: 10 }}>⏳</span>
+          <span style={{ fontSize: 8, fontFamily: 'var(--font-pixel)', color: '#ffd700' }}>
+            {formatTokens(info.pendingPool)} LFGT PENDING
+          </span>
+        </div>
+      )}
+
       {/* Stats: Players & Entry Fee on one line */}
       <div style={{ fontSize: 9, fontFamily: 'var(--font-pixel)', color: 'var(--color-text-dim)' }}>
         <div style={{ marginBottom: 4 }}>
@@ -168,7 +182,12 @@ export function TournamentCard({ info, navigate, playerRank }: Props) {
           onClick={() => navigate('tournament-entry', { tournamentType: info.tournamentType })}
           disabled={!info.isActive}
         >
-          {info.isActive ? 'ENTER' : 'WAITING…'}
+          {!info.isActive
+            ? 'WAITING…'
+            : info.isPurchaseOpen === false
+              ? 'PLAY (ENTRIES CLOSED)'
+              : 'ENTER'
+          }
         </button>
       </div>
     </div>
