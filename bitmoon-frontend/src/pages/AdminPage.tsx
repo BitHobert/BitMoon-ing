@@ -1,11 +1,21 @@
 import { useState } from 'react';
 import type { NavigateFn } from '../App';
-import type { TournamentType, SponsorBonus } from '../types';
+import type { TournamentType, SponsorBonus, SponsorPlatform, SponsorLink } from '../types';
 import { adminDepositBonus, adminGetBonuses } from '../api/http';
+import { SponsorIcons } from '../components/SponsorIcons';
 
 interface Props { navigate: NavigateFn; }
 
 const TOURNAMENT_TYPES: TournamentType[] = ['daily', 'weekly', 'monthly'];
+const PLATFORM_OPTIONS: { value: SponsorPlatform; label: string }[] = [
+  { value: 'x',         label: 'X (Twitter)' },
+  { value: 'telegram',  label: 'Telegram' },
+  { value: 'website',   label: 'Website' },
+  { value: 'instagram', label: 'Instagram' },
+  { value: 'discord',   label: 'Discord' },
+  { value: 'youtube',   label: 'YouTube' },
+];
+interface LinkRow { platform: SponsorPlatform; url: string; }
 
 function truncate(s: string, len = 12): string {
   if (s.length <= len) return s;
@@ -33,6 +43,7 @@ export function AdminPage({ navigate }: Props) {
   const [depositToken, setDepositToken]       = useState('');
   const [depositSymbol, setDepositSymbol]     = useState('');
   const [depositAmount, setDepositAmount]     = useState('');
+  const [depositLinks, setDepositLinks]       = useState<LinkRow[]>([]);
   const [depositStatus, setDepositStatus]     = useState<{ ok: boolean; msg: string } | null>(null);
   const [depositing, setDepositing]           = useState(false);
 
@@ -51,12 +62,18 @@ export function AdminPage({ navigate }: Props) {
     setDepositStatus(null);
     setDepositing(true);
     try {
+      // Build links array — only include rows with a URL filled in
+      const links: SponsorLink[] = depositLinks
+        .filter(l => l.url.trim().length > 0)
+        .map(l => ({ platform: l.platform, url: l.url.trim() }));
+
       const result = await adminDepositBonus(adminSecret, {
         tournamentType: depositType,
         periodKey: depositPeriodKey,
         tokenAddress: depositToken.trim(),
         tokenSymbol: depositSymbol.trim().toUpperCase(),
         amount: depositAmount.trim(),
+        ...(links.length > 0 ? { links } : {}),
       });
       setDepositStatus({ ok: true, msg: `Deposited! Slot #${result.bonus.slotIndex} — tx: ${truncate(result.bonus.txHash, 20)}` });
       setDepositAmount('');
@@ -223,6 +240,62 @@ export function AdminPage({ navigate }: Props) {
             />
           </div>
 
+          {/* ── Sponsor Links (optional, up to 3) ──────────────────────── */}
+          <div>
+            <label style={labelStyle}>SPONSOR LINKS (OPTIONAL — UP TO 3)</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {depositLinks.map((row, idx) => (
+                <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <select
+                    value={row.platform}
+                    onChange={e => {
+                      const next = [...depositLinks];
+                      next[idx] = { ...row, platform: e.target.value as SponsorPlatform };
+                      setDepositLinks(next);
+                    }}
+                    style={{ ...selectStyle, width: 140, flex: 'none' }}
+                  >
+                    {PLATFORM_OPTIONS.map(p => (
+                      <option key={p.value} value={p.value}>{p.label}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="https://…"
+                    value={row.url}
+                    onChange={e => {
+                      const next = [...depositLinks];
+                      next[idx] = { ...row, url: e.target.value };
+                      setDepositLinks(next);
+                    }}
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setDepositLinks(depositLinks.filter((_, i) => i !== idx))}
+                    style={{
+                      background: 'none', border: 'none', color: 'var(--color-red)',
+                      cursor: 'pointer', fontSize: 14, padding: '4px 8px', lineHeight: 1,
+                    }}
+                    title="Remove link"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {depositLinks.length < 3 && (
+                <button
+                  type="button"
+                  className="btn btn-blue"
+                  style={{ fontSize: 8, padding: '6px 14px', alignSelf: 'flex-start' }}
+                  onClick={() => setDepositLinks([...depositLinks, { platform: 'x', url: '' }])}
+                >
+                  + ADD LINK
+                </button>
+              )}
+            </div>
+          </div>
+
           <button
             className="btn btn-solid-orange"
             style={{ fontSize: 9, alignSelf: 'flex-start', padding: '10px 24px' }}
@@ -302,7 +375,7 @@ export function AdminPage({ navigate }: Props) {
                 }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                      {['SLOT', 'SYMBOL', 'TOKEN', 'AMOUNT', 'TX HASH', 'DATE'].map(h => (
+                      {['SLOT', 'SYMBOL', 'TOKEN', 'AMOUNT', 'LINKS', 'TX HASH', 'DATE'].map(h => (
                         <th key={h} style={{
                           padding: '8px 6px', textAlign: 'left',
                           fontFamily: 'var(--font-pixel)', fontSize: 7,
@@ -326,6 +399,11 @@ export function AdminPage({ navigate }: Props) {
                         </td>
                         <td style={{ padding: '6px', color: 'var(--color-green)' }}>
                           {formatTokens(b.amount)}
+                        </td>
+                        <td style={{ padding: '6px' }}>
+                          {b.links && b.links.length > 0
+                            ? <SponsorIcons links={b.links} size={12} />
+                            : <span style={{ color: 'var(--color-text-dim)' }}>—</span>}
                         </td>
                         <td style={{ padding: '6px', color: 'var(--color-text-dim)' }} title={b.txHash}>
                           {truncate(b.txHash, 16)}

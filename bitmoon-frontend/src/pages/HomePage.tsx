@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import type { NavigateFn } from '../App';
 import { getTournaments } from '../api/http';
-import type { TournamentInfo, TournamentType, TierNumber } from '../types';
+import type { TournamentInfo, TournamentType, TierNumber, SponsorLink } from '../types';
+import { SponsorIcons } from '../components/SponsorIcons';
 import { PlayerCard } from '../components/PlayerCard';
 import { useWalletContext } from '../context/WalletContext';
 import {
@@ -196,14 +197,17 @@ export function HomePage({ navigate }: Props) {
                       )}
                     </div>
                     {info.sponsorBonuses && info.sponsorBonuses.length > 0 && (() => {
-                      const bySymbol = new Map<string, bigint>();
+                      const bySymbol = new Map<string, { total: bigint; decimals: number; links: SponsorLink[] }>();
                       for (const b of info.sponsorBonuses) {
                         const sym = b.tokenSymbol || 'BONUS';
-                        bySymbol.set(sym, (bySymbol.get(sym) ?? 0n) + BigInt(b.amount));
+                        const prev = bySymbol.get(sym);
+                        const mergedLinks = [...(prev?.links ?? []), ...(b.links ?? [])];
+                        const uniqueLinks = mergedLinks.filter((l, i, arr) => arr.findIndex(x => x.platform === l.platform) === i);
+                        bySymbol.set(sym, { total: (prev?.total ?? 0n) + BigInt(b.amount), decimals: b.decimals ?? 8, links: uniqueLinks });
                       }
                       return (
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                          {[...bySymbol.entries()].map(([sym, total]) => (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                          {[...bySymbol.entries()].map(([sym, { total, decimals, links }]) => (
                             <span key={sym} style={{
                               display: 'inline-flex', alignItems: 'center', gap: 3,
                               padding: '2px 6px', borderRadius: 3, fontSize: 7,
@@ -212,7 +216,8 @@ export function HomePage({ navigate }: Props) {
                               color: 'var(--color-green)',
                             }}>
                               <span style={{ fontSize: 8 }}>⭐</span>
-                              +{formatTokens(total.toString())} {sym}
+                              +{formatTokens(total.toString(), decimals)} {sym}
+                              {links.length > 0 && <SponsorIcons links={links} size={10} />}
                             </span>
                           ))}
                         </div>

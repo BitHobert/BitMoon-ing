@@ -1,4 +1,5 @@
-import type { TournamentInfo, TournamentType } from '../types';
+import type { TournamentInfo, TournamentType, SponsorLink } from '../types';
+import { SponsorIcons } from './SponsorIcons';
 import type { NavigateFn } from '../App';
 
 const TYPE_LABELS: Record<TournamentType, string> = {
@@ -95,15 +96,17 @@ export function TournamentCard({ info, navigate, playerRank }: Props) {
         </div>
         <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginTop: 2 }}>LFGT</div>
         {info.sponsorBonuses && info.sponsorBonuses.length > 0 && (() => {
-          // Group bonuses by token symbol and show each separately
-          const bySymbol = new Map<string, bigint>();
+          const bySymbol = new Map<string, { total: bigint; decimals: number; links: SponsorLink[] }>();
           for (const b of info.sponsorBonuses) {
             const sym = b.tokenSymbol || 'BONUS';
-            bySymbol.set(sym, (bySymbol.get(sym) ?? 0n) + BigInt(b.amount));
+            const prev = bySymbol.get(sym);
+            const mergedLinks = [...(prev?.links ?? []), ...(b.links ?? [])];
+            const uniqueLinks = mergedLinks.filter((l, i, arr) => arr.findIndex(x => x.platform === l.platform) === i);
+            bySymbol.set(sym, { total: (prev?.total ?? 0n) + BigInt(b.amount), decimals: b.decimals ?? 8, links: uniqueLinks });
           }
           return (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
-              {[...bySymbol.entries()].map(([sym, total]) => (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6, alignItems: 'center' }}>
+              {[...bySymbol.entries()].map(([sym, { total, decimals, links }]) => (
                 <div key={sym} style={{
                   display: 'inline-flex', alignItems: 'center', gap: 4,
                   padding: '3px 8px', borderRadius: 3,
@@ -113,8 +116,9 @@ export function TournamentCard({ info, navigate, playerRank }: Props) {
                   <span style={{
                     fontSize: 8, fontFamily: 'var(--font-pixel)', color: 'var(--color-green)',
                   }}>
-                    +{formatTokens(total.toString())} {sym}
+                    +{formatTokens(total.toString(), decimals)} {sym}
                   </span>
+                  {links.length > 0 && <SponsorIcons links={links} size={11} />}
                 </div>
               ))}
             </div>

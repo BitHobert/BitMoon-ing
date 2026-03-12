@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import type { NavigateFn, PageContext } from '../App';
 import { getTournaments, getTournamentLeaderboard, getTournamentWinners, getTurnsRemaining } from '../api/http';
-import type { TournamentInfo, TournamentType, LeaderboardEntry, PrizeDistribution } from '../types';
+import type { TournamentInfo, TournamentType, LeaderboardEntry, PrizeDistribution, SponsorLink } from '../types';
+import { SponsorIcons } from '../components/SponsorIcons';
 import { useWalletContext } from '../context/WalletContext';
 import { useBlockHeight } from '../hooks/useBlockHeight';
 // ── Shared constants ──────────────────────────────────────────────────────────
@@ -219,23 +220,30 @@ export function TournamentDetailPage({ navigate, ctx }: Props) {
 
         {/* Sponsor bonuses */}
         {info.sponsorBonuses && info.sponsorBonuses.length > 0 && (() => {
-          const bySymbol = new Map<string, bigint>();
+          const bySymbol = new Map<string, { total: bigint; decimals: number; links: SponsorLink[] }>();
           for (const b of info.sponsorBonuses) {
             const sym = b.tokenSymbol || 'BONUS';
-            bySymbol.set(sym, (bySymbol.get(sym) ?? 0n) + BigInt(b.amount));
+            const prev = bySymbol.get(sym);
+            // Merge links from all bonuses of the same symbol, dedup by platform
+            const mergedLinks = [...(prev?.links ?? []), ...(b.links ?? [])];
+            const uniqueLinks = mergedLinks.filter((l, i, arr) => arr.findIndex(x => x.platform === l.platform) === i);
+            bySymbol.set(sym, { total: (prev?.total ?? 0n) + BigInt(b.amount), decimals: b.decimals ?? 8, links: uniqueLinks });
           }
           return (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-              {[...bySymbol.entries()].map(([sym, total]) => (
-                <div key={sym} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                  padding: '4px 10px', borderRadius: 3,
-                  background: 'rgba(57,255,20,0.1)', border: '1px solid rgba(57,255,20,0.3)',
-                }}>
-                  <span style={{ fontSize: 10 }}>⭐</span>
-                  <span style={{ fontSize: 8, fontFamily: 'var(--font-pixel)', color: 'var(--color-green)' }}>
-                    +{formatTokens(total.toString())} {sym}
-                  </span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12, alignItems: 'center' }}>
+              {[...bySymbol.entries()].map(([sym, { total, decimals, links }]) => (
+                <div key={sym} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    padding: '4px 10px', borderRadius: 3,
+                    background: 'rgba(57,255,20,0.1)', border: '1px solid rgba(57,255,20,0.3)',
+                  }}>
+                    <span style={{ fontSize: 10 }}>⭐</span>
+                    <span style={{ fontSize: 8, fontFamily: 'var(--font-pixel)', color: 'var(--color-green)' }}>
+                      +{formatTokens(total.toString(), decimals)} {sym}
+                    </span>
+                  </div>
+                  {links.length > 0 && <SponsorIcons links={links} />}
                 </div>
               ))}
             </div>

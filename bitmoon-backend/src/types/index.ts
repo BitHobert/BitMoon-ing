@@ -257,7 +257,7 @@ export interface TournamentInfo {
      */
     readonly pendingPool: string;
     /** Sponsor bonuses deposited for this tournament period (if any) */
-    readonly sponsorBonuses?: ReadonlyArray<{ readonly tokenAddress: string; readonly tokenSymbol: string; readonly amount: string }>;
+    readonly sponsorBonuses?: ReadonlyArray<{ readonly tokenAddress: string; readonly tokenSymbol: string; readonly amount: string; readonly decimals: number; readonly links: SponsorLink[] }>;
 }
 
 export interface PrizeDistribution {
@@ -288,6 +288,15 @@ export interface PrizeDistribution {
 
 // ─── Sponsor Bonus ────────────────────────────────────────────────────────────
 
+/** Supported sponsor link platforms */
+export type SponsorPlatform = 'x' | 'telegram' | 'website' | 'instagram' | 'discord' | 'youtube';
+
+/** A single sponsor link (platform + URL) */
+export interface SponsorLink {
+    readonly platform: SponsorPlatform;
+    readonly url: string;
+}
+
 /**
  * Request body for POST /v1/admin/sponsor-bonus.
  * The operator must verify the on-chain OP-20 transfer of the bonus tokens
@@ -307,6 +316,10 @@ export interface SponsorBonusRequest {
     readonly tokenSymbol: string;
     /** Bonus amount in raw token units (positive integer as string, for BigInt safety) */
     readonly amount: string;
+    /** Token decimal places (default 8). Needed for correct display on the frontend. */
+    readonly decimals?: number;
+    /** Optional sponsor links (up to 3) — displayed as icons on the tournament page */
+    readonly links?: SponsorLink[];
 }
 
 /**
@@ -324,6 +337,10 @@ export interface SponsorBonus {
     readonly tokenSymbol: string;
     /** Bonus amount in raw token units, as string */
     readonly amount: string;
+    /** Token decimal places (default 8) */
+    readonly decimals: number;
+    /** Sponsor links (up to 3) */
+    readonly links: SponsorLink[];
     /** On-chain slot index assigned by the contract (0-based) */
     readonly slotIndex: number;
     /** On-chain depositBonus() transaction hash */

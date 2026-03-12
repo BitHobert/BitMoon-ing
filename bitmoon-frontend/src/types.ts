@@ -7,6 +7,12 @@ export type BadgeLevel = 'bronze' | 'silver' | 'gold' | 'diamond' | 'lunar';
 export type TierNumber = 1 | 2 | 3 | 4 | 5;
 export type GameEventType = 'kill' | 'hit' | 'miss' | 'powerup' | 'wave_clear' | 'player_death';
 export type WsMessageType = 'supply_update' | 'kill_feed' | 'leaderboard_update' | 'pong';
+export type SponsorPlatform = 'x' | 'telegram' | 'website' | 'instagram' | 'discord' | 'youtube';
+
+export interface SponsorLink {
+  readonly platform: SponsorPlatform;
+  readonly url: string;
+}
 
 export interface GameEvent {
   readonly tick: number;
@@ -44,7 +50,7 @@ export interface TournamentInfo {
   readonly nextStartBlock: string;
   readonly isActive: boolean;
   readonly pendingPool: string;
-  readonly sponsorBonuses?: ReadonlyArray<{ readonly tokenAddress: string; readonly tokenSymbol: string; readonly amount: string }>;
+  readonly sponsorBonuses?: ReadonlyArray<{ readonly tokenAddress: string; readonly tokenSymbol: string; readonly amount: string; readonly decimals: number; readonly links: SponsorLink[] }>;
 }
 
 export interface PrizeDistribution {
@@ -161,6 +167,8 @@ export interface SponsorBonusRequest {
   readonly tokenAddress: string;
   readonly tokenSymbol: string;
   readonly amount: string;
+  readonly decimals?: number;
+  readonly links?: SponsorLink[];
 }
 
 export interface SponsorBonus {
@@ -170,6 +178,8 @@ export interface SponsorBonus {
   readonly tokenAddress: string;
   readonly tokenSymbol: string;
   readonly amount: string;
+  readonly decimals: number;
+  readonly links: SponsorLink[];
   readonly slotIndex: number;
   readonly txHash: string;
   readonly depositedAt: number;

@@ -452,6 +452,8 @@ export class ApiServer {
                             tokenAddress: b.tokenAddress,
                             tokenSymbol: b.tokenSymbol,
                             amount: b.amount,
+                            decimals: b.decimals ?? 8,
+                            links: b.links ?? [],
                         })),
                     };
                 } catch {
@@ -763,7 +765,7 @@ export class ApiServer {
         try { body = await req.json() as SponsorBonusRequest; }
         catch { res.status(400).json({ error: 'Invalid JSON body' }); return; }
 
-        const { tournamentType, periodKey, tokenAddress, tokenSymbol, amount } = body;
+        const { tournamentType, periodKey, tokenAddress, tokenSymbol, amount, decimals, links } = body;
 
         if (!tournamentType || !['daily', 'weekly', 'monthly'].includes(tournamentType)) {
             res.status(400).json({ error: 'tournamentType must be daily | weekly | monthly' });
@@ -788,7 +790,7 @@ export class ApiServer {
 
         try {
             const bonus = await PrizeDistributorService.getInstance()
-                .depositBonus(tournamentType, periodKey, tokenAddress.trim(), tokenSymbol.trim().toUpperCase(), BigInt(amount));
+                .depositBonus(tournamentType, periodKey, tokenAddress.trim(), tokenSymbol.trim().toUpperCase(), BigInt(amount), decimals ?? 8, links ?? []);
             res.status(201).json({ success: true, bonus });
         } catch (err: unknown) {
             const message = (err as Error).message ?? 'depositBonus failed';

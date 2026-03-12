@@ -12,7 +12,7 @@ import {
     type IPrizeDistributorContract,
     type SponsorBonusDepositedEventData,
 } from '../contracts/PrizeDistributorABI.js';
-import type { PrizeDistribution, SponsorBonus, TournamentEntry, TournamentType } from '../types/index.js';
+import type { PrizeDistribution, SponsorBonus, SponsorLink, TournamentEntry, TournamentType } from '../types/index.js';
 
 type DistributionDoc = PrizeDistribution;
 
@@ -183,6 +183,8 @@ export class PrizeDistributorService {
         tokenAddress: string,
         tokenSymbol: string,
         amount: bigint,
+        decimals: number = 8,
+        links: SponsorLink[] = [],
     ): Promise<SponsorBonus> {
         let txid = '';
         let slotIndex = 0;
@@ -238,6 +240,8 @@ export class PrizeDistributorService {
             tokenAddress,
             tokenSymbol,
             amount:         amount.toString(),
+            decimals,
+            links:          links.slice(0, 3),
             slotIndex,
             txHash:         txid || 'off-chain',
             depositedAt:    Date.now(),
@@ -705,6 +709,8 @@ export class PrizeDistributorService {
             tokenAddress:   b.tokenAddress,
             tokenSymbol:    b.tokenSymbol,
             amount:         b.amount,
+            decimals:       b.decimals ?? 8,
+            links:          b.links ?? [],
             slotIndex:      existingCount + i,
             txHash:         'rolled-forward',
             depositedAt:    Date.now(),
