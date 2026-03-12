@@ -43,6 +43,7 @@ export function AdminPage({ navigate }: Props) {
   const [depositToken, setDepositToken]       = useState('');
   const [depositSymbol, setDepositSymbol]     = useState('');
   const [depositAmount, setDepositAmount]     = useState('');
+  const [depositDecimals, setDepositDecimals] = useState(8);
   const [depositLinks, setDepositLinks]       = useState<LinkRow[]>([]);
   const [depositStatus, setDepositStatus]     = useState<{ ok: boolean; msg: string } | null>(null);
   const [depositing, setDepositing]           = useState(false);
@@ -67,12 +68,16 @@ export function AdminPage({ navigate }: Props) {
         .filter(l => l.url.trim().length > 0)
         .map(l => ({ platform: l.platform, url: l.url.trim() }));
 
+      // Convert human-readable amount → raw token units
+      const rawAmount = BigInt(Math.round(parseFloat(depositAmount.trim()) * (10 ** depositDecimals))).toString();
+
       const result = await adminDepositBonus(adminSecret, {
         tournamentType: depositType,
         periodKey: depositPeriodKey,
         tokenAddress: depositToken.trim(),
         tokenSymbol: depositSymbol.trim().toUpperCase(),
-        amount: depositAmount.trim(),
+        amount: rawAmount,
+        decimals: depositDecimals,
         ...(links.length > 0 ? { links } : {}),
       });
       setDepositStatus({ ok: true, msg: `Deposited! Slot #${result.bonus.slotIndex} — tx: ${truncate(result.bonus.txHash, 20)}` });
@@ -229,16 +234,43 @@ export function AdminPage({ navigate }: Props) {
             </div>
           </div>
 
-          <div>
-            <label style={labelStyle}>AMOUNT (RAW TOKEN UNITS)</label>
-            <input
-              type="text"
-              placeholder="e.g. 100000000 (= 1.0 with 8 decimals)"
-              value={depositAmount}
-              onChange={e => setDepositAmount(e.target.value)}
-              style={inputStyle}
-            />
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div style={{ flex: 3, minWidth: 180 }}>
+              <label style={labelStyle}>AMOUNT (HUMAN-READABLE)</label>
+              <input
+                type="text"
+                placeholder="e.g. 1000"
+                value={depositAmount}
+                onChange={e => setDepositAmount(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+            <div style={{ flex: 1, minWidth: 100 }}>
+              <label style={labelStyle}>DECIMALS</label>
+              <select
+                value={depositDecimals}
+                onChange={e => setDepositDecimals(Number(e.target.value))}
+                style={selectStyle}
+              >
+                {[0, 2, 4, 6, 8, 10, 18].map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
           </div>
+          {/* Live raw-unit preview */}
+          {depositAmount && /^\d+(\.\d+)?$/.test(depositAmount.trim()) && (
+            <div style={{
+              padding: '6px 12px', borderRadius: 4, fontSize: 10,
+              fontFamily: 'var(--font-mono)',
+              background: 'rgba(74,158,255,0.08)',
+              border: '1px solid rgba(74,158,255,0.2)',
+              color: 'var(--color-blue)',
+            }}>
+              → {BigInt(Math.round(parseFloat(depositAmount.trim()) * (10 ** depositDecimals))).toLocaleString()} raw units
+              ({depositAmount.trim()} × 10^{depositDecimals})
+            </div>
+          )}
 
           {/* ── Sponsor Links (optional, up to 3) ──────────────────────── */}
           <div>
@@ -398,7 +430,7 @@ export function AdminPage({ navigate }: Props) {
                           {truncate(b.tokenAddress)}
                         </td>
                         <td style={{ padding: '6px', color: 'var(--color-green)' }}>
-                          {formatTokens(b.amount)}
+                          {formatTokens(b.amount, b.decimals ?? 8)}
                         </td>
                         <td style={{ padding: '6px' }}>
                           {b.links && b.links.length > 0
