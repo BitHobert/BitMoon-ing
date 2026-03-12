@@ -387,7 +387,7 @@ export function GameGuidePage({ navigate }: Props) {
             {[
               { icon: '🔁', text: 'Unplayed turns automatically roll to the next tournament period of the same type.' },
               { icon: '💰', text: 'Your pending fees stay intact — they only enter the prize pool when you play.' },
-              { icon: '📅', text: 'New entries are cut off near the end of each period (purchase deadline), but you can still play existing turns.' },
+              { icon: '🎯', text: 'Your score is locked to whichever tournament is active when you finish playing. If a period ends mid-game, your score counts toward the next tournament.' },
             ].map(item => (
               <div key={item.text} style={{
                 display: 'flex', alignItems: 'flex-start', gap: 6,
@@ -441,6 +441,36 @@ export function GameGuidePage({ navigate }: Props) {
           </div>
           <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginTop: 4 }}>
             The higher your score, the bigger the bonus. Keep your kill streak going!
+          </div>
+        </div>
+      </section>
+
+      {/* ── CONNECTION ─────────────────────────────────────────────────── */}
+      <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <h2 className="pixel" style={{ ...sectionTitle, color: '#e74c3c' }}>
+          📡 CONNECTION & SCORE SUBMISSION
+        </h2>
+
+        <div style={infoBlock}>
+          <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginBottom: 8 }}>
+            Your score is submitted to the server when your game ends (when you die). A stable internet connection is required at that moment for your score to be recorded.
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {[
+              { icon: '🔌', text: 'If you close your browser or navigate away mid-game, we automatically submit your current score as a safety net.' },
+              { icon: '📶', text: 'If you lose internet during a game, the game keeps running locally — but your score cannot be submitted without a connection.' },
+              { icon: '⚠️', text: 'Lost connection = lost score. Make sure you have a stable connection before playing tournament games. This is not something we can fix on our end.' },
+              { icon: '🎮', text: 'Your turn is consumed when the game starts, not when your score is submitted. A disconnection does not refund your turn.' },
+            ].map(item => (
+              <div key={item.text} style={{
+                display: 'flex', alignItems: 'flex-start', gap: 6,
+                padding: '4px 8px', borderRadius: 3,
+                background: 'var(--color-bg)', border: '1px solid var(--color-border)',
+              }}>
+                <span style={{ fontSize: 10, flexShrink: 0 }}>{item.icon}</span>
+                <span style={{ fontSize: 8, color: 'var(--color-text-dim)' }}>{item.text}</span>
+              </div>
+            ))}
           </div>
         </div>
       </section>

@@ -14,9 +14,11 @@ interface Props {
   onKill:     (tier: TierNumber, points: number) => void;
   onPlanet:   (planet: PlanetConfig | null) => void;
   onPowerup:  (kind: PowerupKind | null, weaponFrames: number, laserFrames: number, shieldCount: number) => void;
+  /** Exposed so the parent can read live game state (events, score, burned) for disconnect auto-submit */
+  engineRef?: React.MutableRefObject<GameEngine | null>;
 }
 
-export function GameCanvas({ onGameOver, onScore, onWave, onLives, onKill, onPlanet, onPowerup }: Props) {
+export function GameCanvas({ onGameOver, onScore, onWave, onLives, onKill, onPlanet, onPowerup, engineRef: externalEngineRef }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const audioRef  = useRef<AudioEngine | null>(null);
@@ -55,12 +57,14 @@ export function GameCanvas({ onGameOver, onScore, onWave, onLives, onKill, onPla
       onPowerup,
     });
     engineRef.current = engine;
+    if (externalEngineRef) externalEngineRef.current = engine;
     if (audioRef.current) engine.audio = audioRef.current;
     engine.start();
 
     return () => {
       engine.stop();
       engineRef.current = null;
+      if (externalEngineRef) externalEngineRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // only mount/unmount

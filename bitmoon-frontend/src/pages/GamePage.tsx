@@ -6,8 +6,10 @@ import { useWalletContext } from '../context/WalletContext';
 import { useAuthContext } from '../context/AuthContext';
 import { GameCanvas } from '../components/GameCanvas';
 import { GameHUD } from '../components/GameHUD';
+import { GameEngine } from '../game/GameEngine';
 import { PLAYER_LIVES } from '../game/constants';
 import type { PlanetConfig, PowerupKind } from '../game/constants';
+import { NETWORK } from '../config/network';
 
 interface Props { navigate: NavigateFn; ctx: PageContext; }
 
@@ -35,6 +37,12 @@ export function GamePage({ navigate, ctx }: Props) {
   const sessionIdRef       = useRef<string | null>(null);
   const tokenRef           = useRef<string | null>(null);
   const turnsRemainingRef  = useRef<number | undefined>(undefined);
+
+  /** Exposed engine ref so we can read live game state on disconnect */
+  const gameEngineRef = useRef<GameEngine | null>(null);
+
+  /** Tracks whether the session score has already been submitted (normal or disconnect) */
+  const submittedRef = useRef(false);
 
   // Guard against React 18 StrictMode double-mount.
   // Without this, createGameSession is called twice in dev mode,
@@ -87,6 +95,9 @@ export function GamePage({ navigate, ctx }: Props) {
   }, []);
 
   const handleGameOver = useCallback(async (events: GameEvent[], finalScore: number, burned: bigint) => {
+    // Mark as submitted so the disconnect handler doesn't double-fire
+    submittedRef.current = true;
+
     // Count kills and waves from the events array (works for both guest and auth)
     const kills = events.filter(e => e.type === 'kill').length;
     const wavesCleared = events.filter(e => e.type === 'wave_clear').length;
@@ -133,6 +144,62 @@ export function GamePage({ navigate, ctx }: Props) {
     }
     navigate('result', { resultSessionId: sessionId, tournamentType: ctx.tournamentType });
   }, [navigate]);
+
+  // ── Disconnect auto-submit ──────────────────────────────────────────────────
+  // If the player closes the tab, refreshes, or navigates away mid-game,
+  // fire off the current score so their turn isn't wasted.
+  // Uses fetch({ keepalive: true }) which survives page unload (like sendBeacon
+  // but supports custom Authorization headers).
+  useEffect(() => {
+    const submitOnDisconnect = () => {
+      // Already submitted normally (game over) or no active session — skip
+      if (submittedRef.current) return;
+      const sessionId = sessionIdRef.current;
+      const token     = tokenRef.current;
+      const engine    = gameEngineRef.current;
+      if (!sessionId || !token || !engine) return;
+
+      // Grab live game state from the engine
+      const events      = engine.getEvents();
+      const clientScore = engine.getScore();
+      const clientBurned = engine.getBurned();
+
+      // Mark submitted to prevent any further attempts
+      submittedRef.current = true;
+
+      // Fire-and-forget — keepalive:true ensures the request completes
+      // even after the page unloads. We don't await or read the response.
+      const url = `${NETWORK.apiBase}/v1/session/end`;
+      try {
+        fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            sessionId,
+            events,
+            clientScore,
+            clientBurned: clientBurned.toString(),
+          }),
+          keepalive: true,
+        }).catch(() => { /* best-effort — nothing we can do if it fails */ });
+      } catch {
+        // Synchronous errors (e.g. browser already tearing down) — ignore
+      }
+
+      console.log('[GamePage] Disconnect auto-submit fired for session:', sessionId);
+    };
+
+    window.addEventListener('beforeunload', submitOnDisconnect);
+    window.addEventListener('pagehide',     submitOnDisconnect);
+
+    return () => {
+      window.removeEventListener('beforeunload', submitOnDisconnect);
+      window.removeEventListener('pagehide',     submitOnDisconnect);
+    };
+  }, []);
 
   const handleKill = useCallback((_tier: TierNumber, _pts: number) => {
     // Kill feed will be emitted via WebSocket from the backend when session ends;
@@ -182,6 +249,7 @@ export function GamePage({ navigate, ctx }: Props) {
           onKill={handleKill}
           onPlanet={setCurrentPlanet}
           onPowerup={handlePowerup}
+          engineRef={gameEngineRef}
         />
       </div>
 
