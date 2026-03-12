@@ -209,6 +209,14 @@ export interface TournamentEntry {
     readonly turnsTotal: number;
     /** Number of game turns still available (starts at turnsTotal, decremented each game) */
     readonly turnsRemaining: number;
+    /**
+     * Fee per turn in raw token units (as string for BigInt safety).
+     * Set at purchase time = amountPaid / turnsTotal.
+     * Pool amounts (devAmount, nextPoolAmount, prizeAmount) start at '0' and are
+     * incremented per-turn when the player actually plays (deferred split).
+     * Absent on legacy entries where the split happened at purchase time.
+     */
+    readonly feePerTurn?: string;
     /** True if this entry was created by rolling over unplayed turns from a previous period */
     readonly isRollover?: boolean;
     /** The original period key where the entry was first purchased (audit trail for rollovers) */
@@ -246,6 +254,12 @@ export interface TournamentInfo {
     readonly purchaseDeadlineBlock: string;
     /** Whether new entries can still be purchased (currentBlock < purchaseDeadlineBlock) */
     readonly isPurchaseOpen: boolean;
+    /**
+     * Total tokens sitting in the "pending" (unplayed) pool for this period (as string).
+     * This is the sum of feePerTurn × turnsRemaining across all entries.
+     * Visible to everyone — shows money waiting to enter the prize pool once played.
+     */
+    readonly pendingPool: string;
     /** Sponsor bonuses deposited for this tournament period (if any) */
     readonly sponsorBonuses?: ReadonlyArray<{ readonly tokenAddress: string; readonly tokenSymbol: string; readonly amount: string }>;
 }

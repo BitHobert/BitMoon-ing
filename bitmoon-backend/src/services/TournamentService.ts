@@ -227,6 +227,10 @@ export class TournamentService {
      * Atomically consume one turn from the player's entry.
      * Picks the most recent entry that still has remaining turns.
      * Throws 403 if no turns remain.
+     *
+     * **Deferred split**: If the entry has a `feePerTurn` field (new-style entry),
+     * the 5/15/80 fee split is applied NOW for one turn. This moves tokens from
+     * the visible "pending pool" into the prize pool, next-pool, and dev-cut.
      */
     public async consumeTurn(
         playerAddress: string,
@@ -250,6 +254,24 @@ export class TournamentService {
                 { statusCode: 403 },
             );
         }
+
+        // Apply per-turn fee split (deferred split — only for entries with feePerTurn)
+        if (result.feePerTurn && BigInt(result.feePerTurn) > 0n) {
+            const perTurnFee = BigInt(result.feePerTurn);
+            const { devAmount, nextPoolAmount, prizeAmount } = this.computeSplit(perTurnFee);
+
+            await this.entries.updateOne(
+                { _id: result._id },
+                {
+                    $set: {
+                        devAmount:      (BigInt(result.devAmount      || '0') + devAmount).toString(),
+                        nextPoolAmount: (BigInt(result.nextPoolAmount || '0') + nextPoolAmount).toString(),
+                        prizeAmount:    (BigInt(result.prizeAmount    || '0') + prizeAmount).toString(),
+                    },
+                },
+            );
+        }
+
         // Sum remaining across ALL entries for this player/period
         const totalRemaining = await this.getRemainingTurns(playerAddress, type, key);
         return { turnsRemaining: totalRemaining };
@@ -328,24 +350,34 @@ export class TournamentService {
         const nextKey = (BigInt(completedPeriodKey) + cycle).toString();
 
         // Create new rollover entries in the next period
-        const rolloverDocs: TournamentEntry[] = staleEntries.map((entry) => ({
-            _id:                   randomUUID(),
-            tournamentType:        type,
-            tournamentKey:         nextKey,
-            playerAddress:         entry.playerAddress,
-            paymentTxHash:         entry.paymentTxHash,
-            amountPaid:            '0',
-            devAmount:             '0',
-            nextPoolAmount:        '0',
-            prizeAmount:           '0',
-            paidAt:                Date.now(),
-            confirmations:         entry.confirmations,
-            isVerified:            true,
-            turnsTotal:            entry.turnsRemaining,
-            turnsRemaining:        entry.turnsRemaining,
-            isRollover:            true,
-            originalTournamentKey: entry.originalTournamentKey ?? entry.tournamentKey,
-        }));
+        const rolloverDocs: TournamentEntry[] = staleEntries.map((entry) => {
+            // Carry feePerTurn so the deferred split still works when the turn is played.
+            // For legacy entries without feePerTurn, compute it from the original purchase.
+            const feePerTurn = entry.feePerTurn
+                ?? (BigInt(entry.amountPaid) > 0n && entry.turnsTotal > 0
+                    ? (BigInt(entry.amountPaid) / BigInt(entry.turnsTotal)).toString()
+                    : '0');
+
+            return {
+                _id:                   randomUUID(),
+                tournamentType:        type,
+                tournamentKey:         nextKey,
+                playerAddress:         entry.playerAddress,
+                paymentTxHash:         entry.paymentTxHash,
+                amountPaid:            '0',
+                devAmount:             '0',
+                nextPoolAmount:        '0',
+                prizeAmount:           '0',
+                paidAt:                Date.now(),
+                confirmations:         entry.confirmations,
+                isVerified:            true,
+                turnsTotal:            entry.turnsRemaining,
+                turnsRemaining:        entry.turnsRemaining,
+                feePerTurn,
+                isRollover:            true,
+                originalTournamentKey: entry.originalTournamentKey ?? entry.tournamentKey,
+            };
+        });
 
         await this.entries.insertMany(rolloverDocs);
 
@@ -401,24 +433,33 @@ export class TournamentService {
         if (pastEntries.length === 0) return 0;
 
         // Create rollover entries in the current period
-        const rolloverDocs: TournamentEntry[] = pastEntries.map((entry) => ({
-            _id:                   randomUUID(),
-            tournamentType:        type,
-            tournamentKey:         currentKey,
-            playerAddress,
-            paymentTxHash:         entry.paymentTxHash,
-            amountPaid:            '0',
-            devAmount:             '0',
-            nextPoolAmount:        '0',
-            prizeAmount:           '0',
-            paidAt:                Date.now(),
-            confirmations:         entry.confirmations,
-            isVerified:            true,
-            turnsTotal:            entry.turnsRemaining,
-            turnsRemaining:        entry.turnsRemaining,
-            isRollover:            true,
-            originalTournamentKey: entry.originalTournamentKey ?? entry.tournamentKey,
-        }));
+        const rolloverDocs: TournamentEntry[] = pastEntries.map((entry) => {
+            // Carry feePerTurn for deferred split (see rolloverEntries for same logic)
+            const feePerTurn = entry.feePerTurn
+                ?? (BigInt(entry.amountPaid) > 0n && entry.turnsTotal > 0
+                    ? (BigInt(entry.amountPaid) / BigInt(entry.turnsTotal)).toString()
+                    : '0');
+
+            return {
+                _id:                   randomUUID(),
+                tournamentType:        type,
+                tournamentKey:         currentKey,
+                playerAddress,
+                paymentTxHash:         entry.paymentTxHash,
+                amountPaid:            '0',
+                devAmount:             '0',
+                nextPoolAmount:        '0',
+                prizeAmount:           '0',
+                paidAt:                Date.now(),
+                confirmations:         entry.confirmations,
+                isVerified:            true,
+                turnsTotal:            entry.turnsRemaining,
+                turnsRemaining:        entry.turnsRemaining,
+                feePerTurn,
+                isRollover:            true,
+                originalTournamentKey: entry.originalTournamentKey ?? entry.tournamentKey,
+            };
+        });
 
         await this.entries.insertMany(rolloverDocs);
 
@@ -514,10 +555,11 @@ export class TournamentService {
                 const config = await this.getFeeConfig(type);
 
                 // Walk backwards to accumulate all undistributed carryover
-                const [currentPool, carryover, nextPool, count] = await Promise.all([
+                const [currentPool, carryover, nextPool, pendingPool, count] = await Promise.all([
                     this.getPrizePool(type, period.tournamentKey),
                     this.computeCarryover(type, period.tournamentKey),
                     this.getNextPool(type, period.tournamentKey),
+                    this.getPendingPool(type, period.tournamentKey),
                     this.getEntryCount(type, period.tournamentKey),
                 ]);
                 const totalPrize = currentPool + carryover;
@@ -531,6 +573,7 @@ export class TournamentService {
                     prizePool:       totalPrize.toString(),
                     carryover:       carryover.toString(),
                     nextPool:        nextPool.toString(),
+                    pendingPool:     pendingPool.toString(),
                     entrantCount:    count,
                     startsAtBlock:   period.startsAtBlock.toString(),
                     endsAtBlock:     period.endsAtBlock.toString(),
@@ -542,6 +585,38 @@ export class TournamentService {
                 } satisfies TournamentInfo;
             }),
         );
+    }
+
+    /**
+     * Total tokens sitting in the "pending" (unplayed) pool for a period.
+     * = sum of feePerTurn × turnsRemaining across all entries with remaining turns.
+     *
+     * For legacy entries without feePerTurn, computes it from amountPaid/turnsTotal.
+     * These are tokens that have been paid but not yet played — visible to everyone.
+     */
+    public async getPendingPool(type: TournamentType, key: string): Promise<bigint> {
+        const docs = await this.entries
+            .find(
+                {
+                    tournamentType: type,
+                    tournamentKey: key,
+                    isVerified: true,
+                    turnsRemaining: { $gt: 0 },
+                },
+                { projection: { feePerTurn: 1, turnsRemaining: 1, amountPaid: 1, turnsTotal: 1 } },
+            )
+            .toArray();
+
+        let total = 0n;
+        for (const entry of docs) {
+            const perTurn = entry.feePerTurn
+                ? BigInt(entry.feePerTurn)
+                : (BigInt(entry.amountPaid) > 0n && entry.turnsTotal > 0
+                    ? BigInt(entry.amountPaid) / BigInt(entry.turnsTotal)
+                    : 0n);
+            total += perTurn * BigInt(entry.turnsRemaining);
+        }
+        return total;
     }
 
     /** Sum of all verified 80 % prize contributions for a period. */

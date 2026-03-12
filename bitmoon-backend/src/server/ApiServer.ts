@@ -535,20 +535,28 @@ export class ApiServer {
         }
 
         try {
+            // Deferred split: pool amounts start at '0' — the 5/15/80 split happens
+            // per-turn when the player actually plays (in consumeTurn).
+            // feePerTurn = total paid ÷ turns purchased.
+            const feePerTurn = quantity > 0
+                ? (verification.amountPaid / BigInt(quantity)).toString()
+                : '0';
+
             const entry = await this.tournament.recordEntry({
                 tournamentType,
                 tournamentKey:  key,
                 playerAddress,
                 paymentTxHash:  txHash,
                 amountPaid:     verification.amountPaid.toString(),
-                devAmount:      verification.devAmount.toString(),
-                nextPoolAmount: verification.nextPoolAmount.toString(),
-                prizeAmount:    verification.prizeAmount.toString(),
+                devAmount:      '0',
+                nextPoolAmount: '0',
+                prizeAmount:    '0',
                 paidAt:         Date.now(),
                 confirmations:  verification.confirmations,
                 isVerified:     verification.valid,
                 turnsTotal:     quantity,
                 turnsRemaining: quantity,
+                feePerTurn,
             });
 
             // Notify the on-chain contract to update pool accounting (non-blocking)
@@ -668,10 +676,11 @@ export class ApiServer {
         }
 
         const key = period.tournamentKey;
-        const [config, prizePool, nextPool, entrantCount] = await Promise.all([
+        const [config, prizePool, nextPool, pendingPool, entrantCount] = await Promise.all([
             this.tournament.getFeeConfig(type),
             this.tournament.getPrizePool(type, key),
             this.tournament.getNextPool(type, key),
+            this.tournament.getPendingPool(type, key),
             this.tournament.getEntryCount(type, key),
         ]);
 
@@ -683,6 +692,7 @@ export class ApiServer {
             updatedAt:       config.updatedAt,
             prizePool:       prizePool.toString(),
             nextPool:        nextPool.toString(),
+            pendingPool:     pendingPool.toString(),
             entrantCount,
             startsAtBlock:   period.startsAtBlock.toString(),
             endsAtBlock:     period.endsAtBlock.toString(),
