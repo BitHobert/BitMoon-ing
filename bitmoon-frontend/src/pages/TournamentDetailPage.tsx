@@ -54,6 +54,14 @@ export function TournamentDetailPage({ navigate, ctx }: Props) {
   const [pastWinners, setPastWinners] = useState<PrizeDistribution[]>([]);
   const [turnsLeft, setTurnsLeft] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
+
+  const copyAddress = (addr: string) => {
+    navigator.clipboard.writeText(addr).then(() => {
+      setCopiedAddr(addr);
+      setTimeout(() => setCopiedAddr(null), 2000);
+    }).catch(() => {});
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -478,13 +486,65 @@ export function TournamentDetailPage({ navigate, ctx }: Props) {
                           </div>
                         )}
                       </div>
-                      <span style={{
-                        fontFamily: 'var(--font-pixel)', fontSize: 8,
-                        color: 'var(--color-orange)',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {formatTokens(w.amount)} LFGT
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
+                        <span style={{
+                          fontFamily: 'var(--font-pixel)', fontSize: 8,
+                          color: 'var(--color-orange)',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {formatTokens(w.amount)} LFGT
+                        </span>
+                        {/* Green token icon — hover to reveal contract address */}
+                        <span
+                          style={{ position: 'relative', display: 'inline-flex', cursor: 'pointer' }}
+                          className="token-addr-trigger"
+                        >
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: 16, height: 16, borderRadius: '50%',
+                            background: 'rgba(57,255,20,0.15)', border: '1px solid rgba(57,255,20,0.4)',
+                            fontSize: 8, lineHeight: 1,
+                          }}>
+                            🪙
+                          </span>
+                          {/* Tooltip: contract address + copy */}
+                          <div className="token-addr-tooltip" style={{
+                            position: 'absolute', right: 0, top: '100%', marginTop: 4,
+                            background: 'var(--color-surface, #1a1a2e)', border: '1px solid var(--color-border)',
+                            borderRadius: 4, padding: '8px 10px', zIndex: 100,
+                            display: 'none', whiteSpace: 'nowrap', minWidth: 220,
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                          }}>
+                            <div style={{
+                              fontFamily: 'var(--font-pixel)', fontSize: 6,
+                              color: 'var(--color-text-dim)', marginBottom: 4,
+                            }}>
+                              LFGT CONTRACT ADDRESS
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{
+                                fontFamily: 'var(--font-mono)', fontSize: 8,
+                                color: 'var(--color-text)', wordBreak: 'break-all',
+                              }}>
+                                {info.tokenAddress}
+                              </span>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); copyAddress(info.tokenAddress); }}
+                                style={{
+                                  background: copiedAddr === info.tokenAddress ? 'rgba(57,255,20,0.2)' : 'rgba(255,255,255,0.08)',
+                                  border: `1px solid ${copiedAddr === info.tokenAddress ? 'var(--color-green)' : 'var(--color-border)'}`,
+                                  color: copiedAddr === info.tokenAddress ? 'var(--color-green)' : 'var(--color-text)',
+                                  borderRadius: 3, padding: '3px 8px', cursor: 'pointer',
+                                  fontFamily: 'var(--font-pixel)', fontSize: 6, whiteSpace: 'nowrap',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {copiedAddr === info.tokenAddress ? '✓ COPIED' : '📋 COPY'}
+                              </button>
+                            </div>
+                          </div>
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>

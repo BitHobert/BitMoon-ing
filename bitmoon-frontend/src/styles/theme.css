@@ -135,3 +135,7 @@ body {
   0%, 100% { opacity: 0.3; }
   50%      { opacity: 0.8; }
 }
+
+/* Token address tooltip — hover to reveal */
+.token-addr-trigger .token-addr-tooltip { display: none !important; }
+.token-addr-trigger:hover .token-addr-tooltip { display: block !important; }
