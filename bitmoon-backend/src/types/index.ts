@@ -209,6 +209,10 @@ export interface TournamentEntry {
     readonly turnsTotal: number;
     /** Number of game turns still available (starts at turnsTotal, decremented each game) */
     readonly turnsRemaining: number;
+    /** True if this entry was created by rolling over unplayed turns from a previous period */
+    readonly isRollover?: boolean;
+    /** The original period key where the entry was first purchased (audit trail for rollovers) */
+    readonly originalTournamentKey?: string;
 }
 
 export interface TournamentInfo {
@@ -238,6 +242,10 @@ export interface TournamentInfo {
     readonly nextStartBlock: string;
     /** Whether the current block is within this period's active range */
     readonly isActive: boolean;
+    /** Block after which new entry purchases are no longer accepted (as string) */
+    readonly purchaseDeadlineBlock: string;
+    /** Whether new entries can still be purchased (currentBlock < purchaseDeadlineBlock) */
+    readonly isPurchaseOpen: boolean;
     /** Sponsor bonuses deposited for this tournament period (if any) */
     readonly sponsorBonuses?: ReadonlyArray<{ readonly tokenAddress: string; readonly tokenSymbol: string; readonly amount: string }>;
 }

@@ -504,10 +504,21 @@ export class ApiServer {
             return;
         }
 
-        // Resolve current period key (throws 404 if in gap between periods)
+        // Resolve current period and enforce purchase deadline
         let key: string;
         try {
-            key = await this.tournament.getTournamentKey(tournamentType);
+            const period = await this.tournament.getCurrentPeriod(tournamentType);
+            if (!period.isActive) {
+                res.status(404).json({ error: `No active ${tournamentType} tournament right now (in gap between periods)` });
+                return;
+            }
+            if (!period.isPurchaseOpen) {
+                res.status(403).json({
+                    error: `Purchase window has closed. You can still play remaining turns until block ${period.endsAtBlock.toString()}`,
+                });
+                return;
+            }
+            key = period.tournamentKey;
         } catch (err: unknown) {
             const statusCode = (err as { statusCode?: number }).statusCode ?? 500;
             res.status(statusCode).json({ error: (err as Error).message });
@@ -678,6 +689,8 @@ export class ApiServer {
             prizeBlock:      period.prizeBlock.toString(),
             nextStartBlock:  period.nextStartBlock.toString(),
             isActive:        period.isActive,
+            purchaseDeadlineBlock: period.purchaseDeadlineBlock.toString(),
+            isPurchaseOpen:       period.isPurchaseOpen,
         });
     }
 
@@ -718,6 +731,8 @@ export class ApiServer {
             res.json({ turnsRemaining: 0 });
             return;
         }
+        // Catch up any stranded entries from past periods before counting
+        await this.tournament.catchUpRollovers(address, type as TournamentType, key);
         const turnsRemaining = await this.tournament.getRemainingTurns(address, type as TournamentType, key);
         res.json({ turnsRemaining });
     }

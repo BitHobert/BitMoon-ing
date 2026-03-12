@@ -17,12 +17,14 @@ type EntryDoc     = TournamentEntry;
  * Block-based tournament period for a single tournament type.
  */
 export interface TournamentPeriod {
-    readonly tournamentKey:  string;  // start block as string (deterministic ID)
-    readonly startsAtBlock:  bigint;
-    readonly endsAtBlock:    bigint;
-    readonly prizeBlock:     bigint;  // endsAtBlock + 1
-    readonly nextStartBlock: bigint;  // endsAtBlock + GAP + 1
-    readonly isActive:       boolean; // currentBlock is within [startsAtBlock, endsAtBlock]
+    readonly tournamentKey:        string;  // start block as string (deterministic ID)
+    readonly startsAtBlock:        bigint;
+    readonly endsAtBlock:          bigint;
+    readonly prizeBlock:           bigint;  // endsAtBlock + 1
+    readonly nextStartBlock:       bigint;  // endsAtBlock + GAP + 1
+    readonly isActive:             boolean; // currentBlock is within [startsAtBlock, endsAtBlock]
+    readonly purchaseDeadlineBlock: bigint;  // endsAtBlock - PURCHASE_DEADLINE_OFFSET
+    readonly isPurchaseOpen:       boolean; // currentBlock < purchaseDeadlineBlock
 }
 
 /**
@@ -110,6 +112,10 @@ export class TournamentService {
 
         const isActive = currentBlock >= startsAtBlock && currentBlock <= endsAtBlock;
 
+        // Purchase deadline: no new entry purchases after this block
+        const purchaseDeadlineBlock = endsAtBlock - Config.PURCHASE_DEADLINE_OFFSET;
+        const isPurchaseOpen = currentBlock < purchaseDeadlineBlock;
+
         return {
             tournamentKey:  startsAtBlock.toString(),
             startsAtBlock,
@@ -117,6 +123,8 @@ export class TournamentService {
             prizeBlock,
             nextStartBlock,
             isActive,
+            purchaseDeadlineBlock,
+            isPurchaseOpen,
         };
     }
 
@@ -286,6 +294,169 @@ export class TournamentService {
         );
     }
 
+    // ── Rollover ──────────────────────────────────────────────────────────────
+
+    /**
+     * Roll unplayed entries from a completed period into the next period.
+     *
+     * Finds all verified entries in `completedPeriodKey` with turnsRemaining > 0,
+     * creates new entries in the next period with:
+     *   - turnsTotal = turnsRemaining from the source entry
+     *   - all pool amounts = '0' (they don't contribute to the new prize pool)
+     *   - isRollover = true
+     *   - originalTournamentKey preserved (audit trail back to original purchase)
+     *
+     * The source entries are zeroed out (turnsRemaining = 0) to prevent duplication.
+     * If entries roll over again from the next period, originalTournamentKey still
+     * points to the very first purchase.
+     */
+    public async rolloverEntries(type: TournamentType, completedPeriodKey: string): Promise<number> {
+        // Find all entries with unplayed turns
+        const staleEntries = await this.entries
+            .find({
+                tournamentType: type,
+                tournamentKey: completedPeriodKey,
+                isVerified: true,
+                turnsRemaining: { $gt: 0 },
+            })
+            .toArray();
+
+        if (staleEntries.length === 0) return 0;
+
+        // Compute the next period key
+        const { cycle } = TournamentService.durationFor(type);
+        const nextKey = (BigInt(completedPeriodKey) + cycle).toString();
+
+        // Create new rollover entries in the next period
+        const rolloverDocs: TournamentEntry[] = staleEntries.map((entry) => ({
+            _id:                   randomUUID(),
+            tournamentType:        type,
+            tournamentKey:         nextKey,
+            playerAddress:         entry.playerAddress,
+            paymentTxHash:         entry.paymentTxHash,
+            amountPaid:            '0',
+            devAmount:             '0',
+            nextPoolAmount:        '0',
+            prizeAmount:           '0',
+            paidAt:                Date.now(),
+            confirmations:         entry.confirmations,
+            isVerified:            true,
+            turnsTotal:            entry.turnsRemaining,
+            turnsRemaining:        entry.turnsRemaining,
+            isRollover:            true,
+            originalTournamentKey: entry.originalTournamentKey ?? entry.tournamentKey,
+        }));
+
+        await this.entries.insertMany(rolloverDocs);
+
+        // Zero out the source entries to prevent duplication
+        const sourceIds = staleEntries.map((e) => e._id);
+        await this.entries.updateMany(
+            { _id: { $in: sourceIds } },
+            { $set: { turnsRemaining: 0 } },
+        );
+
+        const totalTurns = staleEntries.reduce((sum, e) => sum + e.turnsRemaining, 0);
+        console.log(
+            `[TournamentService] Rolled over ${staleEntries.length} entries (${totalTurns} turns) from ${type}/${completedPeriodKey} → ${type}/${nextKey}`,
+        );
+
+        return staleEntries.length;
+    }
+
+    /**
+     * Bring stranded rollover entries from past periods forward to the current period.
+     *
+     * If a player bought entries in period A, didn't play, and the watcher rolled
+     * them to period B — but the player was absent for B too (and the watcher
+     * moved them to C) — this method catches up any stragglers that are still
+     * sitting in old periods the player missed.
+     *
+     * It finds ALL verified entries for `playerAddress` in PAST periods (key < currentKey)
+     * that still have turnsRemaining > 0, creates rollover entries in the current period,
+     * and zeros out the source entries.
+     *
+     * Safe to call multiple times — zeroing the source prevents duplication.
+     */
+    public async catchUpRollovers(
+        playerAddress: string,
+        type: TournamentType,
+        currentKey: string,
+    ): Promise<number> {
+        // Find stale entries in ANY past period with remaining turns
+        const staleEntries = await this.entries
+            .find({
+                playerAddress,
+                tournamentType: type,
+                tournamentKey: { $ne: currentKey },
+                isVerified: true,
+                turnsRemaining: { $gt: 0 },
+            })
+            .toArray();
+
+        // Filter to only entries from periods BEFORE the current one
+        const currentStart = BigInt(currentKey);
+        const pastEntries = staleEntries.filter((e) => BigInt(e.tournamentKey) < currentStart);
+
+        if (pastEntries.length === 0) return 0;
+
+        // Create rollover entries in the current period
+        const rolloverDocs: TournamentEntry[] = pastEntries.map((entry) => ({
+            _id:                   randomUUID(),
+            tournamentType:        type,
+            tournamentKey:         currentKey,
+            playerAddress,
+            paymentTxHash:         entry.paymentTxHash,
+            amountPaid:            '0',
+            devAmount:             '0',
+            nextPoolAmount:        '0',
+            prizeAmount:           '0',
+            paidAt:                Date.now(),
+            confirmations:         entry.confirmations,
+            isVerified:            true,
+            turnsTotal:            entry.turnsRemaining,
+            turnsRemaining:        entry.turnsRemaining,
+            isRollover:            true,
+            originalTournamentKey: entry.originalTournamentKey ?? entry.tournamentKey,
+        }));
+
+        await this.entries.insertMany(rolloverDocs);
+
+        // Zero out source entries to prevent duplication
+        const sourceIds = pastEntries.map((e) => e._id);
+        await this.entries.updateMany(
+            { _id: { $in: sourceIds } },
+            { $set: { turnsRemaining: 0 } },
+        );
+
+        const totalTurns = pastEntries.reduce((sum, e) => sum + e.turnsRemaining, 0);
+        console.log(
+            `[TournamentService] Catch-up rollover for ${playerAddress}: ${pastEntries.length} entries (${totalTurns} turns) → ${type}/${currentKey}`,
+        );
+
+        return pastEntries.length;
+    }
+
+    /**
+     * Count only fresh (non-rollover) entries for display purposes.
+     * Rollover entries don't contribute to the prize pool, so separating them
+     * gives a clearer picture of actual pool funding.
+     */
+    public async getFreshEntryCount(type: TournamentType, key: string): Promise<number> {
+        const result = await this.entries.aggregate<{ total: number }>([
+            {
+                $match: {
+                    tournamentType: type,
+                    tournamentKey: key,
+                    isVerified: true,
+                    $or: [{ isRollover: { $exists: false } }, { isRollover: false }],
+                },
+            },
+            { $group: { _id: null, total: { $sum: '$turnsTotal' } } },
+        ]).toArray();
+        return result[0]?.total ?? 0;
+    }
+
     // ── Carryover ─────────────────────────────────────────────────────────────
 
     /**
@@ -366,6 +537,8 @@ export class TournamentService {
                     prizeBlock:      period.prizeBlock.toString(),
                     nextStartBlock:  period.nextStartBlock.toString(),
                     isActive:        period.isActive,
+                    purchaseDeadlineBlock: period.purchaseDeadlineBlock.toString(),
+                    isPurchaseOpen:       period.isPurchaseOpen,
                 } satisfies TournamentInfo;
             }),
         );
@@ -446,6 +619,10 @@ export class TournamentService {
             { key: { paymentTxHash: 1 } },
             // Leaderboard queries
             { key: { isVerified: 1, tournamentType: 1, tournamentKey: 1 } },
+            // Rollover queries: find entries with unplayed turns in a period
+            { key: { tournamentType: 1, tournamentKey: 1, isVerified: 1, turnsRemaining: 1 } },
+            // Catch-up rollover queries: find stranded entries for a specific player
+            { key: { playerAddress: 1, tournamentType: 1, isVerified: 1, turnsRemaining: 1 } },
         ];
         await this.entries.createIndexes(entryIndexes);
     }

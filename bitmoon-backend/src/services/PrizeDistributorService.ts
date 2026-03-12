@@ -313,6 +313,12 @@ export class PrizeDistributorService {
         if (top3.length === 0) {
             console.log(`[PrizeDistributorService] No players for ${type}/${periodKey} — carryover will roll forward to next period`);
             await this.rollForwardBonuses(type, periodKey);
+            // Roll over any purchased-but-unplayed entries to the next period
+            try {
+                await TournamentService.getInstance().rolloverEntries(type, periodKey);
+            } catch (err) {
+                console.error('[PrizeDistributorService] Entry rollover failed (empty period):', err);
+            }
             return; // Don't record a distribution — carryover accumulates for the next period
         }
 
@@ -423,6 +429,13 @@ export class PrizeDistributorService {
             if ((err as NodeJS.ErrnoException & { code?: number }).code !== 11000) {
                 throw err;
             }
+        }
+
+        // Roll over unplayed entries to the next period (non-fatal)
+        try {
+            await TournamentService.getInstance().rolloverEntries(type, periodKey);
+        } catch (err) {
+            console.error('[PrizeDistributorService] Entry rollover failed:', err);
         }
     }
 

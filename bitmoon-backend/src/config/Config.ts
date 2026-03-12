@@ -169,6 +169,13 @@ export const Config = {
      */
     TOURNAMENT_GAP_BLOCKS: 2n,
 
+    /**
+     * Number of blocks before endsAtBlock when new entry purchases are cut off.
+     * Players can still play their remaining turns during this window.
+     * purchaseDeadlineBlock = endsAtBlock - PURCHASE_DEADLINE_OFFSET
+     */
+    PURCHASE_DEADLINE_OFFSET: 2n,
+
     // ── Fee split ratios (basis points, total = 10 000) ───────────────────────
     /** 5 % → developer wallet */
     ENTRY_FEE_DEV_BPS:       500,

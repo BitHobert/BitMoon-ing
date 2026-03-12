@@ -60,6 +60,8 @@ export class GameSessionService {
             const ts = TournamentService.getInstance();
             // getTournamentKey() throws 404 if currently in the inter-period gap
             tournamentKey = await ts.getTournamentKey(tournamentType);
+            // Catch up any stranded entries from past periods before consuming a turn
+            await ts.catchUpRollovers(playerAddress, tournamentType, tournamentKey);
             const turns = await ts.consumeTurn(playerAddress, tournamentType, tournamentKey);
             turnsRemaining = turns.turnsRemaining;
         }
