@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { WalletConnectProvider } from '@btc-vision/walletconnect';
 import { WalletProvider } from './context/WalletContext';
 import { AuthProvider } from './context/AuthContext';
@@ -9,14 +9,16 @@ import type { TournamentType } from './types';
 import { SpaceBackground } from './components/SpaceBackground';
 import { TopBar } from './components/TopBar';
 
-// Pages
+// Eager — first page everyone sees
 import { HomePage } from './pages/HomePage';
-import { TournamentDetailPage } from './pages/TournamentDetailPage';
-import { GamePage } from './pages/GamePage';
-import { ResultPage } from './pages/ResultPage';
-import { TournamentEntryPage } from './pages/TournamentEntryPage';
-import { AdminPage } from './pages/AdminPage';
-import { GameGuidePage } from './pages/GameGuidePage';
+
+// Lazy — only downloaded when navigated to
+const TournamentDetailPage = lazy(() => import('./pages/TournamentDetailPage').then(m => ({ default: m.TournamentDetailPage })));
+const GamePage             = lazy(() => import('./pages/GamePage').then(m => ({ default: m.GamePage })));
+const ResultPage           = lazy(() => import('./pages/ResultPage').then(m => ({ default: m.ResultPage })));
+const TournamentEntryPage  = lazy(() => import('./pages/TournamentEntryPage').then(m => ({ default: m.TournamentEntryPage })));
+const AdminPage            = lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
+const GameGuidePage        = lazy(() => import('./pages/GameGuidePage').then(m => ({ default: m.GameGuidePage })));
 
 // ── Page types ────────────────────────────────────────────────────────────────
 
@@ -66,12 +68,14 @@ export default function App() {
 
             {/* Pages */}
             {(page === 'home' || page === 'lobby') && <HomePage navigate={navigate} />}
-            {page === 'tournament-detail' && <TournamentDetailPage navigate={navigate} ctx={pageCtx} />}
-            {page === 'game'              && <GamePage navigate={navigate} ctx={pageCtx} />}
-            {page === 'result'            && <ResultPage navigate={navigate} ctx={pageCtx} />}
-            {page === 'tournament-entry'  && <TournamentEntryPage navigate={navigate} ctx={pageCtx} />}
-            {page === 'admin'             && <AdminPage navigate={navigate} />}
-            {page === 'guide'             && <GameGuidePage navigate={navigate} />}
+            <Suspense fallback={null}>
+              {page === 'tournament-detail' && <TournamentDetailPage navigate={navigate} ctx={pageCtx} />}
+              {page === 'game'              && <GamePage navigate={navigate} ctx={pageCtx} />}
+              {page === 'result'            && <ResultPage navigate={navigate} ctx={pageCtx} />}
+              {page === 'tournament-entry'  && <TournamentEntryPage navigate={navigate} ctx={pageCtx} />}
+              {page === 'admin'             && <AdminPage navigate={navigate} />}
+              {page === 'guide'             && <GameGuidePage navigate={navigate} />}
+            </Suspense>
           </WsProvider>
         </AuthProvider>
       </WalletProvider>

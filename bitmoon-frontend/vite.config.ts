@@ -3,6 +3,21 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Heavy OPNet / crypto libs — cached separately from app code
+          'opnet-libs': [
+            'opnet',
+            '@btc-vision/transaction',
+            '@btc-vision/bitcoin',
+            '@btc-vision/walletconnect',
+          ],
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {
