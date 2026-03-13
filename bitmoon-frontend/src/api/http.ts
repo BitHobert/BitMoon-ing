@@ -152,4 +152,12 @@ export function adminGetBonuses(
   );
 }
 
+export function adminGetAllBonuses(
+  adminSecret: string,
+): Promise<{ bonuses: SponsorBonus[] }> {
+  return request('/v1/admin/sponsor-bonus', {
+    headers: { 'X-Admin-Secret': adminSecret },
+  });
+}
+
 export { ApiError };

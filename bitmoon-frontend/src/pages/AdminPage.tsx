@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { NavigateFn } from '../App';
 import type { TournamentType, SponsorBonus, SponsorPlatform, SponsorLink, PrizeShare } from '../types';
-import { adminDepositBonus, adminGetBonuses } from '../api/http';
+import { adminDepositBonus, adminGetAllBonuses } from '../api/http';
 import { SponsorIcons } from '../components/SponsorIcons';
 
 interface Props { navigate: NavigateFn; }
@@ -49,16 +49,30 @@ export function AdminPage({ navigate }: Props) {
   const [depositStatus, setDepositStatus]     = useState<{ ok: boolean; msg: string } | null>(null);
   const [depositing, setDepositing]           = useState(false);
 
-  // Query
-  const [queryType, setQueryType]         = useState<TournamentType>('daily');
-  const [queryPeriodKey, setQueryPeriodKey] = useState('');
+  // All bonuses (auto-loaded)
   const [bonuses, setBonuses]             = useState<SponsorBonus[] | null>(null);
-  const [querying, setQuerying]           = useState(false);
-  const [queryError, setQueryError]       = useState('');
+  const [bonusesLoading, setBonusesLoading] = useState(false);
 
   const handleAuth = () => {
     if (adminSecret.trim().length > 0) setAuthenticated(true);
   };
+
+  // Auto-load all bonuses when authenticated
+  const loadBonuses = async () => {
+    setBonusesLoading(true);
+    try {
+      const result = await adminGetAllBonuses(adminSecret);
+      setBonuses(result.bonuses);
+    } catch {
+      setBonuses([]);
+    } finally {
+      setBonusesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (authenticated) loadBonuses();
+  }, [authenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDeposit = async () => {
     setDepositStatus(null);
@@ -84,24 +98,12 @@ export function AdminPage({ navigate }: Props) {
       });
       setDepositStatus({ ok: true, msg: `Deposited! Slot #${result.bonus.slotIndex} — tx: ${truncate(result.bonus.txHash, 20)}` });
       setDepositAmount('');
+      // Refresh the bonuses list
+      loadBonuses();
     } catch (err: unknown) {
       setDepositStatus({ ok: false, msg: (err as Error).message });
     } finally {
       setDepositing(false);
-    }
-  };
-
-  const handleQuery = async () => {
-    setQueryError('');
-    setBonuses(null);
-    setQuerying(true);
-    try {
-      const result = await adminGetBonuses(adminSecret, queryType, queryPeriodKey);
-      setBonuses(result.bonuses);
-    } catch (err: unknown) {
-      setQueryError((err as Error).message);
-    } finally {
-      setQuerying(false);
     }
   };
 
@@ -461,108 +463,86 @@ export function AdminPage({ navigate }: Props) {
           )}
         </section>
 
-        {/* ── Query Existing Bonuses ───────────────────────────────────────── */}
+        {/* ── All Sponsor Bonuses ────────────────────────────────────────── */}
         <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <h2 className="pixel" style={{ fontSize: 10, color: 'var(--color-blue)' }}>
-            🔍 QUERY SPONSOR BONUSES
-          </h2>
-
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <div style={{ flex: 1, minWidth: 140 }}>
-              <label style={labelStyle}>TOURNAMENT TYPE</label>
-              <select value={queryType} onChange={e => setQueryType(e.target.value as TournamentType)} style={selectStyle}>
-                {TOURNAMENT_TYPES.map(t => <option key={t} value={t}>{t.toUpperCase()}</option>)}
-              </select>
-            </div>
-            <div style={{ flex: 1, minWidth: 140 }}>
-              <label style={labelStyle}>PERIOD KEY (BLOCK #)</label>
-              <input
-                type="text"
-                placeholder="e.g. 1000"
-                value={queryPeriodKey}
-                onChange={e => setQueryPeriodKey(e.target.value)}
-                style={inputStyle}
-              />
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h2 className="pixel" style={{ fontSize: 10, color: 'var(--color-blue)', margin: 0 }}>
+              ⭐ SPONSOR BONUSES
+            </h2>
             <button
               className="btn btn-blue"
-              style={{ fontSize: 9, padding: '10px 20px', whiteSpace: 'nowrap' }}
-              onClick={handleQuery}
-              disabled={querying || !queryPeriodKey}
+              style={{ fontSize: 8, padding: '5px 12px' }}
+              onClick={loadBonuses}
+              disabled={bonusesLoading}
             >
-              {querying ? 'LOADING…' : 'QUERY'}
+              {bonusesLoading ? 'LOADING…' : '↻ REFRESH'}
             </button>
           </div>
 
-          {queryError && (
-            <div style={{
-              padding: '8px 12px', borderRadius: 4, fontSize: 10,
-              fontFamily: 'var(--font-mono)', background: 'rgba(255,59,59,0.1)',
-              border: '1px solid var(--color-red)', color: 'var(--color-red)',
-            }}>
-              {queryError}
-            </div>
+          {bonusesLoading && !bonuses && (
+            <p style={{ color: 'var(--color-text-dim)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
+              Loading sponsor bonuses…
+            </p>
           )}
 
-          {bonuses !== null && (
-            bonuses.length === 0 ? (
-              <p style={{ color: 'var(--color-text-dim)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
-                No sponsor bonuses found for this period.
-              </p>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{
-                  width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 10,
-                }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                      {['SLOT', 'SYMBOL', 'TOKEN', 'AMOUNT', 'SPLIT', 'LINKS', 'TX HASH', 'DATE'].map(h => (
-                        <th key={h} style={{
-                          padding: '8px 6px', textAlign: 'left',
-                          fontFamily: 'var(--font-pixel)', fontSize: 7,
-                          color: 'var(--color-text-dim)',
-                        }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {bonuses.map((b, i) => (
-                      <tr key={b._id} style={{
-                        borderBottom: '1px solid var(--color-border)',
-                        background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
-                      }}>
-                        <td style={{ padding: '6px', color: 'var(--color-orange)' }}>#{b.slotIndex}</td>
-                        <td style={{ padding: '6px', color: 'var(--color-green)', fontFamily: 'var(--font-pixel)' }}>
-                          {b.tokenSymbol}
-                        </td>
-                        <td style={{ padding: '6px', color: 'var(--color-text)' }} title={b.tokenAddress}>
-                          {truncate(b.tokenAddress)}
-                        </td>
-                        <td style={{ padding: '6px', color: 'var(--color-green)' }}>
-                          {formatTokens(b.amount, b.decimals ?? 8)}
-                        </td>
-                        <td style={{ padding: '6px', color: 'var(--color-blue)', fontFamily: 'var(--font-pixel)', fontSize: 7 }}>
-                          {(b.prizeShares && b.prizeShares.length > 0)
-                            ? b.prizeShares.map(s => `#${s.place}:${s.percent}%`).join(' ')
-                            : '#1:100%'}
-                        </td>
-                        <td style={{ padding: '6px' }}>
-                          {b.links && b.links.length > 0
-                            ? <SponsorIcons links={b.links} size={12} />
-                            : <span style={{ color: 'var(--color-text-dim)' }}>—</span>}
-                        </td>
-                        <td style={{ padding: '6px', color: 'var(--color-text-dim)' }} title={b.txHash}>
-                          {truncate(b.txHash, 16)}
-                        </td>
-                        <td style={{ padding: '6px', color: 'var(--color-text-dim)' }}>
-                          {new Date(b.depositedAt).toLocaleDateString()}
-                        </td>
-                      </tr>
+          {bonuses !== null && bonuses.length === 0 && (
+            <p style={{ color: 'var(--color-text-dim)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
+              No sponsor bonuses deposited yet.
+            </p>
+          )}
+
+          {bonuses !== null && bonuses.length > 0 && (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{
+                width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 10,
+              }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    {['SYMBOL', 'TOKEN ADDRESS', 'TOURNAMENT', 'BLOCK', 'AMOUNT', 'DISTRIBUTION', 'LINKS'].map(h => (
+                      <th key={h} style={{
+                        padding: '8px 6px', textAlign: 'left',
+                        fontFamily: 'var(--font-pixel)', fontSize: 7,
+                        color: 'var(--color-text-dim)',
+                      }}>{h}</th>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            )
+                  </tr>
+                </thead>
+                <tbody>
+                  {bonuses.map((b, i) => (
+                    <tr key={b._id} style={{
+                      borderBottom: '1px solid var(--color-border)',
+                      background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
+                    }}>
+                      <td style={{ padding: '6px', color: 'var(--color-green)', fontFamily: 'var(--font-pixel)' }}>
+                        {b.tokenSymbol}
+                      </td>
+                      <td style={{ padding: '6px', color: 'var(--color-text)' }} title={b.tokenAddress}>
+                        {truncate(b.tokenAddress, 16)}
+                      </td>
+                      <td style={{ padding: '6px', color: 'var(--color-orange)', fontFamily: 'var(--font-pixel)', fontSize: 8 }}>
+                        {b.tournamentType.toUpperCase()}
+                      </td>
+                      <td style={{ padding: '6px', color: 'var(--color-text-dim)' }}>
+                        {b.tournamentKey}
+                      </td>
+                      <td style={{ padding: '6px', color: 'var(--color-green)' }}>
+                        {formatTokens(b.amount, b.decimals ?? 8)} {b.tokenSymbol}
+                      </td>
+                      <td style={{ padding: '6px', color: 'var(--color-blue)', fontFamily: 'var(--font-pixel)', fontSize: 7 }}>
+                        {(b.prizeShares && b.prizeShares.length > 0)
+                          ? b.prizeShares.map(s => `#${s.place}:${s.percent}%`).join(' ')
+                          : '#1:100%'}
+                      </td>
+                      <td style={{ padding: '6px' }}>
+                        {b.links && b.links.length > 0
+                          ? <SponsorIcons links={b.links} size={12} />
+                          : <span style={{ color: 'var(--color-text-dim)' }}>—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
 

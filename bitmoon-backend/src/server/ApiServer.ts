@@ -800,27 +800,35 @@ export class ApiServer {
     }
 
     /**
-     * GET /v1/admin/sponsor-bonus?tournamentType=daily&periodKey=100
-     * Returns all sponsor bonuses recorded for the specified tournament period.
+     * GET /v1/admin/sponsor-bonus
+     * Without params: returns ALL sponsor bonuses (newest first).
+     * With ?tournamentType=daily&periodKey=100: returns bonuses for that specific period.
      */
     private async handleAdminGetBonuses(req: Req, res: Res): Promise<void> {
         if (!this.verifyAdmin(req, res)) return;
 
-        const tournamentType = String(req.query['tournamentType'] ?? '') as TournamentType;
+        const tournamentType = String(req.query['tournamentType'] ?? '');
         const periodKey      = String(req.query['periodKey']      ?? '');
 
-        if (!['daily', 'weekly', 'monthly'].includes(tournamentType)) {
-            res.status(400).json({ error: 'tournamentType query param must be daily | weekly | monthly' });
-            return;
-        }
-        if (!/^\d+$/.test(periodKey)) {
-            res.status(400).json({ error: 'periodKey query param must be a non-negative integer string' });
+        // If both params provided, filter by period (legacy behavior)
+        if (tournamentType && periodKey) {
+            if (!['daily', 'weekly', 'monthly'].includes(tournamentType)) {
+                res.status(400).json({ error: 'tournamentType query param must be daily | weekly | monthly' });
+                return;
+            }
+            if (!/^\d+$/.test(periodKey)) {
+                res.status(400).json({ error: 'periodKey query param must be a non-negative integer string' });
+                return;
+            }
+            const bonuses = await PrizeDistributorService.getInstance()
+                .getBonusesForPeriod(tournamentType as TournamentType, periodKey);
+            res.json({ tournamentType, periodKey, bonuses });
             return;
         }
 
-        const bonuses = await PrizeDistributorService.getInstance()
-            .getBonusesForPeriod(tournamentType, periodKey);
-        res.json({ tournamentType, periodKey, bonuses });
+        // No params — return all bonuses, newest first
+        const bonuses = await PrizeDistributorService.getInstance().getAllBonuses();
+        res.json({ bonuses });
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

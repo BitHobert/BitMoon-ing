@@ -271,6 +271,15 @@ export class PrizeDistributorService {
             .toArray();
     }
 
+    /**
+     * Returns ALL sponsor bonuses across all periods, newest first.
+     */
+    public async getAllBonuses(limit = 50): Promise<SponsorBonus[]> {
+        return this.sponsorBonuses
+            .find({}, { sort: { depositedAt: -1 }, limit })
+            .toArray();
+    }
+
     // ── Watcher internals ──────────────────────────────────────────────────────
 
     private scheduleWatch(): void {
