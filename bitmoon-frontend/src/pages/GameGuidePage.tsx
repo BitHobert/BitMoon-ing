@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { NavigateFn } from '../App';
 import type { TierNumber } from '../types';
 import {
@@ -7,6 +8,8 @@ import {
   POWERUP_CONFIGS,
 } from '../game/constants';
 
+type GuideSection = 'enemies' | 'planets' | 'bosses' | 'powerups' | 'tournaments' | 'scoring' | 'connection';
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function framesTo(s: number): string {
@@ -14,11 +17,6 @@ function framesTo(s: number): string {
 }
 
 // ── Styles ───────────────────────────────────────────────────────────────────
-
-const sectionTitle: React.CSSProperties = {
-  fontSize: 10,
-  marginBottom: 12,
-};
 
 const tableStyle: React.CSSProperties = {
   width: '100%',
@@ -84,6 +82,24 @@ export function GameGuidePage({ navigate }: Props) {
   const planets  = Object.entries(PLANETS);
   const bosses   = BOSS_POOL;
   const powerups = Object.values(POWERUP_CONFIGS);
+  const [open, setOpen] = useState<GuideSection | null>(null);
+  const toggle = (s: GuideSection) => setOpen(open === s ? null : s);
+
+  const sectionHeader = (id: GuideSection, icon: string, label: string, color: string) => (
+    <button
+      onClick={() => toggle(id)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+        padding: '10px 14px', border: 'none', cursor: 'pointer',
+        background: open === id ? 'var(--color-bg)' : 'transparent',
+        borderBottom: `1px solid ${open === id ? 'var(--color-border)' : 'transparent'}`,
+      }}
+    >
+      <span style={{ fontSize: 14 }}>{icon}</span>
+      <span className="pixel" style={{ flex: 1, textAlign: 'left', fontSize: 9, color }}>{label}</span>
+      <span style={{ fontSize: 10, color: 'var(--color-text-dim)' }}>{open === id ? '▲' : '▼'}</span>
+    </button>
+  );
 
   return (
     <div style={{
@@ -95,10 +111,10 @@ export function GameGuidePage({ navigate }: Props) {
       minHeight: 'calc(100vh - 60px)',
       display: 'flex',
       flexDirection: 'column',
-      gap: 24,
+      gap: 8,
     }}>
       {/* Page title */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
         <button
           className="btn btn-orange"
           style={{ fontSize: 8, padding: '6px 12px' }}
@@ -110,10 +126,9 @@ export function GameGuidePage({ navigate }: Props) {
       </div>
 
       {/* ── ENEMIES ────────────────────────────────────────────────────── */}
-      <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <h2 className="pixel" style={{ ...sectionTitle, color: 'var(--color-orange)' }}>
-          👾 ENEMIES
-        </h2>
+      <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 0, overflow: 'hidden' }}>
+        {sectionHeader('enemies', '👾', 'ENEMIES', 'var(--color-orange)')}
+        {open === 'enemies' && <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={tableStyle}>
             <thead>
@@ -148,13 +163,13 @@ export function GameGuidePage({ navigate }: Props) {
         <p style={noteStyle}>
           Higher tiers appear in later waves. ~20% of enemies are invulnerable (dodge them!).
         </p>
+        </div>}
       </section>
 
       {/* ── PLANETS ────────────────────────────────────────────────────── */}
-      <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <h2 className="pixel" style={{ ...sectionTitle, color: '#b975ff' }}>
-          🌕 PLANETS
-        </h2>
+      <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 0, overflow: 'hidden' }}>
+        {sectionHeader('planets', '🌕', 'PLANETS', '#b975ff')}
+        {open === 'planets' && <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={tableStyle}>
             <thead>
@@ -185,13 +200,13 @@ export function GameGuidePage({ navigate }: Props) {
         <p style={noteStyle}>
           Protect them! Enemies will destroy planets and you lose points. They drift across the screen — don't hit them with your bullets either.
         </p>
+        </div>}
       </section>
 
       {/* ── BOSSES ─────────────────────────────────────────────────────── */}
-      <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <h2 className="pixel" style={{ ...sectionTitle, color: '#ff3b3b' }}>
-          👹 BOSSES
-        </h2>
+      <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 0, overflow: 'hidden' }}>
+        {sectionHeader('bosses', '👹', 'BOSSES', '#ff3b3b')}
+        {open === 'bosses' && <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={tableStyle}>
             <thead>
@@ -228,13 +243,13 @@ export function GameGuidePage({ navigate }: Props) {
         <p style={noteStyle}>
           Bosses appear every 5 waves (wave 5, 10, 15, 20…). They cycle through the roster. Each boss patrols for {framesTo(bosses[0]?.duration ?? 1200)} before retreating.
         </p>
+        </div>}
       </section>
 
       {/* ── POWER-UPS ──────────────────────────────────────────────────── */}
-      <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <h2 className="pixel" style={{ ...sectionTitle, color: 'var(--color-green)' }}>
-          ⚡ POWER-UPS
-        </h2>
+      <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 0, overflow: 'hidden' }}>
+        {sectionHeader('powerups', '⚡', 'POWER-UPS', 'var(--color-green)')}
+        {open === 'powerups' && <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {powerups.map(p => (
             <div key={p.kind} style={{
@@ -263,13 +278,13 @@ export function GameGuidePage({ navigate }: Props) {
         <p style={noteStyle}>
           Power-ups drop randomly when you kill enemies. Collect them by flying over the icon.
         </p>
+        </div>}
       </section>
 
       {/* ── TOURNAMENTS & PRIZES ───────────────────────────────────────── */}
-      <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <h2 className="pixel" style={{ ...sectionTitle, color: 'var(--color-orange)' }}>
-          🏆 TOURNAMENTS & PRIZES
-        </h2>
+      <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 0, overflow: 'hidden' }}>
+        {sectionHeader('tournaments', '🏆', 'TOURNAMENTS & PRIZES', 'var(--color-orange)')}
+        {open === 'tournaments' && <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
 
         <div style={infoBlock}>
           <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 8, color: 'var(--color-orange)', marginBottom: 4 }}>
@@ -400,13 +415,13 @@ export function GameGuidePage({ navigate }: Props) {
             ))}
           </div>
         </div>
+        </div>}
       </section>
 
       {/* ── SCORING ────────────────────────────────────────────────────── */}
-      <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <h2 className="pixel" style={{ ...sectionTitle, color: 'var(--color-blue)' }}>
-          🎯 SCORING SYSTEM
-        </h2>
+      <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 0, overflow: 'hidden' }}>
+        {sectionHeader('scoring', '🎯', 'SCORING SYSTEM', 'var(--color-blue)')}
+        {open === 'scoring' && <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
 
         <div style={infoBlock}>
           <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 8, color: 'var(--color-orange)', marginBottom: 4 }}>
@@ -443,13 +458,13 @@ export function GameGuidePage({ navigate }: Props) {
             The higher your score, the bigger the bonus. Keep your kill streak going!
           </div>
         </div>
+        </div>}
       </section>
 
       {/* ── CONNECTION ─────────────────────────────────────────────────── */}
-      <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <h2 className="pixel" style={{ ...sectionTitle, color: '#e74c3c' }}>
-          📡 CONNECTION & SCORE SUBMISSION
-        </h2>
+      <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 0, overflow: 'hidden' }}>
+        {sectionHeader('connection', '📡', 'CONNECTION & SCORE SUBMISSION', '#e74c3c')}
+        {open === 'connection' && <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
 
         <div style={infoBlock}>
           <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginBottom: 8 }}>
@@ -473,6 +488,7 @@ export function GameGuidePage({ navigate }: Props) {
             ))}
           </div>
         </div>
+        </div>}
       </section>
     </div>
   );
