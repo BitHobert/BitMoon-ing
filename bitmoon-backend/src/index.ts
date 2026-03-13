@@ -42,6 +42,30 @@ import { ApiServer } from './server/ApiServer.js';
 import { WsServer } from './server/WsServer.js';
 
 async function main(): Promise<void> {
+    // ── Mainnet safety checks ────────────────────────────────────────────
+    if (Config.OPNET_NETWORK === 'mainnet') {
+        if (Config.DEV_MODE) {
+            console.error('FATAL: DEV_MODE=true is forbidden on mainnet. Aborting.');
+            process.exit(1);
+        }
+        if (Config.JWT_SECRET.includes('change_me')) {
+            console.error('FATAL: JWT_SECRET is still a placeholder. Set a real secret for mainnet. Aborting.');
+            process.exit(1);
+        }
+        if (Config.ADMIN_SECRET.includes('change_me')) {
+            console.error('FATAL: ADMIN_SECRET is still a placeholder. Set a real secret for mainnet. Aborting.');
+            process.exit(1);
+        }
+        if (!Config.OPERATOR_PRIVATE_KEY) {
+            console.error('FATAL: OPERATOR_PRIVATE_KEY is empty. Aborting.');
+            process.exit(1);
+        }
+        if (Config.CORS_ORIGINS.includes('*')) {
+            console.error('FATAL: CORS_ORIGINS=* is not allowed on mainnet. Set your frontend domain. Aborting.');
+            process.exit(1);
+        }
+    }
+
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log("  BitMoon'ing Backend");
     console.log(`  Network : ${Config.OPNET_NETWORK}`);

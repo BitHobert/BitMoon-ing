@@ -10,8 +10,8 @@ import type { GameEvent, ScoreResult, TierNumber } from '../types/index.js';
  * the session is rejected.
  */
 export class ScoreSimulator {
-    /** Max allowed deviation between client and server score (5%) */
-    private static readonly TOLERANCE_PCT = 0.05;
+    /** Max allowed deviation between client and server score (1%) */
+    private static readonly TOLERANCE_PCT = 0.01;
 
     /**
      * Validate and compute the final score for a session.

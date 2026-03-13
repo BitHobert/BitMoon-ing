@@ -61,7 +61,10 @@ export const Config = {
      */
     INITIAL_SUPPLY: BigInt(process.env['INITIAL_SUPPLY'] ?? '1000000000') * 100_000_000n,
 
-    /** Enable verbose error logging */
+    /**
+     * Enable verbose debug logging + dev-only bypasses (payment auto-approve, auth skip).
+     * CRITICAL: Must NEVER be true on mainnet. Startup guard enforces this.
+     */
     DEV_MODE: process.env['DEV_MODE'] === 'true',
 
     /**
@@ -182,8 +185,8 @@ export const Config = {
     /** How often to poll the DB for supply updates to broadcast (ms) */
     SUPPLY_POLL_INTERVAL_MS: 10_000,
 
-    /** Session TTL before it expires (ms) — 30 minutes */
-    SESSION_TTL_MS: 30 * 60 * 1000,
+    /** Session TTL before it expires (ms) — 90 minutes */
+    SESSION_TTL_MS: 90 * 60 * 1000,
 
     /** Max game ticks we accept in a session event log (anti-cheat ceiling) */
     MAX_GAME_TICKS: 200_000,

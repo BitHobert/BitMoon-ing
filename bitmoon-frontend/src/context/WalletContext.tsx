@@ -4,6 +4,8 @@ import { TransactionFactory, MessageSigner, Address } from '@btc-vision/transact
 import { getContract, IOP20Contract, OP_20_ABI } from 'opnet';
 import { IS_MAINNET } from '../config/network';
 
+const DEV = import.meta.env.DEV;
+
 // ── Public interface (unchanged for consumers) ──────────────────────────────
 
 export type WalletType = 'opnet' | 'unisat' | null;
@@ -95,7 +97,7 @@ function useWalletAdapter(): WalletContextValue {
       throw new Error('Wallet signer not available — try reconnecting');
     }
 
-    console.log('[sendBitcoin] TransactionFactory + walletconnect signer', {
+    if (DEV) console.log('[sendBitcoin] TransactionFactory + walletconnect signer', {
       to: toAddress, satoshis, from: wc.walletAddress,
       signerType: wc.signer.constructor.name,
     });
@@ -110,7 +112,7 @@ function useWalletAdapter(): WalletContextValue {
       throw new Error('No UTXOs found — wallet may have zero balance');
     }
 
-    console.log('[sendBitcoin] UTXOs fetched:', utxos.length);
+    if (DEV) console.log('[sendBitcoin] UTXOs fetched:', utxos.length);
 
     // 2. Build + sign transaction using the walletconnect signer
     //    (bypasses detectFundingOPWallet which calls the broken opnet.web3.sendBitcoin)
@@ -128,7 +130,7 @@ function useWalletAdapter(): WalletContextValue {
       gasSatFee: 0n,
     });
 
-    console.log('[sendBitcoin] Transaction built, broadcasting...');
+    if (DEV) console.log('[sendBitcoin] Transaction built, broadcasting...');
 
     // 3. Broadcast
     const broadcast = await wc.provider.sendRawTransaction(result.tx, false);
@@ -136,7 +138,7 @@ function useWalletAdapter(): WalletContextValue {
       throw new Error(broadcast?.error ?? 'Broadcast failed — no txid returned');
     }
 
-    console.log('[sendBitcoin] SUCCESS, txid:', broadcast.result);
+    if (DEV) console.log('[sendBitcoin] SUCCESS, txid:', broadcast.result);
     return broadcast.result;
   }, [connected, wc.walletAddress, wc.provider, wc.network, wc.signer]);
 
@@ -150,7 +152,7 @@ function useWalletAdapter(): WalletContextValue {
       throw new Error('Wallet not connected');
     }
 
-    console.log('[sendTokenTransfer] starting', {
+    if (DEV) console.log('[sendTokenTransfer] starting', {
       token: tokenAddress, to: toAddress, amount: amount.toString(),
       from: wc.walletAddress,
     });
@@ -168,7 +170,7 @@ function useWalletAdapter(): WalletContextValue {
 
     // 2. Resolve recipient address
     //    getPublicKeyInfo(address, isContract) returns Address directly
-    console.log('[sendTokenTransfer] resolving recipient address...');
+    if (DEV) console.log('[sendTokenTransfer] resolving recipient address...');
     const recipientAddress = await wc.provider.getPublicKeyInfo(toAddress, false);
     if (!recipientAddress) {
       throw new Error(
@@ -176,10 +178,10 @@ function useWalletAdapter(): WalletContextValue {
         `The recipient may not have interacted on-chain yet.`
       );
     }
-    console.log('[sendTokenTransfer] recipient resolved OK');
+    if (DEV) console.log('[sendTokenTransfer] recipient resolved OK');
 
     // 3. Simulate the transfer
-    console.log('[sendTokenTransfer] simulating transfer...');
+    if (DEV) console.log('[sendTokenTransfer] simulating transfer...');
     const sim = await contract.transfer(recipientAddress, amount);
 
     // Check for revert (use .revert per OPNet convention, not 'error' in sim)
@@ -187,7 +189,7 @@ function useWalletAdapter(): WalletContextValue {
       throw new Error(`Transfer reverted: ${sim.revert}`);
     }
 
-    console.log('[sendTokenTransfer] simulation OK, requesting wallet signature...');
+    if (DEV) console.log('[sendTokenTransfer] simulation OK, requesting wallet signature...');
 
     // 4. Send — signer & mldsaSigner are ALWAYS null on frontend
     //    The wallet extension (OP_WALLET) handles signing via detectInteractionOPWallet
@@ -199,7 +201,7 @@ function useWalletAdapter(): WalletContextValue {
       network: wc.network,
     });
 
-    console.log('[sendTokenTransfer] SUCCESS, txid:', receipt.transactionId);
+    if (DEV) console.log('[sendTokenTransfer] SUCCESS, txid:', receipt.transactionId);
     return receipt.transactionId;
   }, [connected, wc.provider, wc.network, wc.walletAddress, wc.address]);
 
@@ -212,7 +214,7 @@ function useWalletAdapter(): WalletContextValue {
       throw new Error('Wallet not connected');
     }
 
-    console.log('[mintTokens] starting', {
+    if (DEV) console.log('[mintTokens] starting', {
       token: tokenAddress, amount: amount.toString(), to: wc.walletAddress,
     });
 
@@ -230,7 +232,7 @@ function useWalletAdapter(): WalletContextValue {
       throw new Error(`Mint reverted: ${sim.revert}`);
     }
 
-    console.log('[mintTokens] simulation OK, requesting wallet signature...');
+    if (DEV) console.log('[mintTokens] simulation OK, requesting wallet signature...');
 
     const receipt = await sim.sendTransaction({
       signer: null as any,
@@ -240,7 +242,7 @@ function useWalletAdapter(): WalletContextValue {
       network: wc.network,
     });
 
-    console.log('[mintTokens] SUCCESS, txid:', receipt.transactionId);
+    if (DEV) console.log('[mintTokens] SUCCESS, txid:', receipt.transactionId);
     return receipt.transactionId;
   }, [connected, wc.provider, wc.network, wc.walletAddress, wc.address]);
 

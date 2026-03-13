@@ -130,10 +130,11 @@ export class PaymentService {
                 }
             }
         } catch {
-            // OPNet RPC may not index plain BTC transactions.
-            // For testnet, accept the txHash with 0 confirmations — the frontend
-            // already sent real sats via the wallet's sendBitcoin API.
-            console.warn(`[PaymentService] Could not fetch tx ${txHash} via OPNet RPC — accepting on trust (testnet)`);
+            if (Config.OPNET_NETWORK === 'mainnet') {
+                return invalid(`Could not verify tx ${txHash} on-chain — rejecting (mainnet)`);
+            }
+            // Testnet/regtest: RPC may not index plain BTC transactions.
+            console.warn(`[PaymentService] Could not fetch tx ${txHash} via OPNet RPC — accepting on trust (${Config.OPNET_NETWORK})`);
             confirmations = 1;
         }
 
@@ -185,19 +186,23 @@ export class PaymentService {
                     );
                     await new Promise((r) => setTimeout(r, RETRY_DELAY));
                 } else {
-                    // All retries exhausted — accept on trust (mirrors native BTC path).
-                    // The wallet already signed + broadcast; the RPC just hasn't indexed it yet.
+                    if (Config.OPNET_NETWORK === 'mainnet') {
+                        return invalid(
+                            `Could not verify OP-20 tx ${txHash} after ${MAX_RETRIES} retries — rejecting (mainnet)`,
+                        );
+                    }
+                    // Testnet/regtest: accept on trust — RPC may be slow to index.
                     console.warn(
                         `[PaymentService] Could not fetch OP-20 tx ${txHash} after ` +
-                        `${MAX_RETRIES} retries — accepting on trust (testnet)`,
+                        `${MAX_RETRIES} retries — accepting on trust (${Config.OPNET_NETWORK})`,
                     );
                     const amountPaid = expectedTotal;
                     const { devAmount, nextPoolAmount, prizeAmount } =
                         TournamentService.getInstance().computeSplit(amountPaid);
                     return {
-                        valid:         true,    // trust the wallet's signed broadcast
-                        confirmations: 1,       // match native BTC trust-mode pattern
-                        amountPaid,             // trust the expected fee
+                        valid:         true,
+                        confirmations: 1,
+                        amountPaid,
                         devAmount,
                         nextPoolAmount,
                         prizeAmount,
