@@ -50,8 +50,6 @@ const POWERUP_EFFECTS: Record<string, string> = {
   shield: 'Absorbs 1 hit per stack (max 2 stacks)',
 };
 
-const sectionTitle: React.CSSProperties = { fontSize: 14, marginBottom: 14 };
-
 const tableStyle: React.CSSProperties = {
   width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 14,
 };
@@ -94,6 +92,27 @@ export function HomePage({ navigate }: Props) {
   const planets  = Object.entries(PLANETS);
   const bosses   = BOSS_POOL;
   const powerups = Object.values(POWERUP_CONFIGS);
+
+  // Guide accordion
+  type GuideSection = 'enemies' | 'planets' | 'bosses' | 'powerups' | 'tournaments' | 'scoring';
+  const [openGuide, setOpenGuide] = useState<GuideSection | null>(null);
+  const toggleGuide = (s: GuideSection) => setOpenGuide(openGuide === s ? null : s);
+
+  const guideHeader = (id: GuideSection, icon: string, label: string, color: string) => (
+    <button
+      onClick={() => toggleGuide(id)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+        padding: '10px 14px', border: 'none', cursor: 'pointer',
+        background: openGuide === id ? 'var(--color-bg)' : 'transparent',
+        borderBottom: `1px solid ${openGuide === id ? 'var(--color-border)' : 'transparent'}`,
+      }}
+    >
+      <span style={{ fontSize: 14 }}>{icon}</span>
+      <span className="pixel" style={{ flex: 1, textAlign: 'left', fontSize: 11, color }}>{label}</span>
+      <span style={{ fontSize: 10, color: 'var(--color-text-dim)' }}>{openGuide === id ? '▲' : '▼'}</span>
+    </button>
+  );
 
   return (
     <div style={{
@@ -319,10 +338,9 @@ export function HomePage({ navigate }: Props) {
         </div>
 
         {/* Enemies */}
-        <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <h2 className="pixel" style={{ ...sectionTitle, color: 'var(--color-orange)' }}>
-            👾 ENEMIES
-          </h2>
+        <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 0, overflow: 'hidden' }}>
+          {guideHeader('enemies', '👾', 'ENEMIES', 'var(--color-orange)')}
+          {openGuide === 'enemies' && <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ overflowX: 'auto' }}>
             <table style={tableStyle}>
               <thead>
@@ -357,13 +375,13 @@ export function HomePage({ navigate }: Props) {
           <p style={noteStyle}>
             Higher tiers appear in later waves. ~20% of enemies are invulnerable (dodge them!).
           </p>
+          </div>}
         </section>
 
         {/* Planets */}
-        <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <h2 className="pixel" style={{ ...sectionTitle, color: '#b975ff' }}>
-            🌕 PLANETS
-          </h2>
+        <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 0, overflow: 'hidden' }}>
+          {guideHeader('planets', '🌕', 'PLANETS', '#b975ff')}
+          {openGuide === 'planets' && <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ overflowX: 'auto' }}>
             <table style={tableStyle}>
               <thead>
@@ -394,13 +412,13 @@ export function HomePage({ navigate }: Props) {
           <p style={noteStyle}>
             Protect them! Enemies will destroy planets and you lose points. They drift across the screen — don't hit them with your bullets either.
           </p>
+          </div>}
         </section>
 
         {/* Bosses */}
-        <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <h2 className="pixel" style={{ ...sectionTitle, color: '#ff3b3b' }}>
-            👹 BOSSES
-          </h2>
+        <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 0, overflow: 'hidden' }}>
+          {guideHeader('bosses', '👹', 'BOSSES', '#ff3b3b')}
+          {openGuide === 'bosses' && <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ overflowX: 'auto' }}>
             <table style={tableStyle}>
               <thead>
@@ -435,13 +453,13 @@ export function HomePage({ navigate }: Props) {
           <p style={noteStyle}>
             Bosses appear every 5 waves (wave 5, 10, 15, 20…). They cycle through the roster. Each boss patrols for {framesTo(bosses[0]?.duration ?? 1200)} before retreating.
           </p>
+          </div>}
         </section>
 
         {/* Power-ups */}
-        <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <h2 className="pixel" style={{ ...sectionTitle, color: 'var(--color-green)' }}>
-            ⚡ POWER-UPS
-          </h2>
+        <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 0, overflow: 'hidden' }}>
+          {guideHeader('powerups', '⚡', 'POWER-UPS', 'var(--color-green)')}
+          {openGuide === 'powerups' && <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {powerups.map(p => (
               <div key={p.kind} style={{
@@ -470,13 +488,13 @@ export function HomePage({ navigate }: Props) {
           <p style={noteStyle}>
             Power-ups drop randomly when you kill enemies. Collect them by flying over the icon.
           </p>
+          </div>}
         </section>
 
         {/* Tournaments & Prizes */}
-        <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <h2 className="pixel" style={{ ...sectionTitle, color: 'var(--color-orange)' }}>
-            🏆 TOURNAMENTS & PRIZES
-          </h2>
+        <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 0, overflow: 'hidden' }}>
+          {guideHeader('tournaments', '🏆', 'TOURNAMENTS & PRIZES', 'var(--color-orange)')}
+          {openGuide === 'tournaments' && <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
 
           <div style={infoBlock}>
             <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 12, color: 'var(--color-orange)', marginBottom: 4 }}>
@@ -594,13 +612,13 @@ export function HomePage({ navigate }: Props) {
               ))}
             </div>
           </div>
+          </div>}
         </section>
 
         {/* Scoring */}
-        <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <h2 className="pixel" style={{ ...sectionTitle, color: 'var(--color-blue)' }}>
-            🎯 SCORING SYSTEM
-          </h2>
+        <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 0, overflow: 'hidden' }}>
+          {guideHeader('scoring', '🎯', 'SCORING SYSTEM', 'var(--color-blue)')}
+          {openGuide === 'scoring' && <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
 
           <div style={infoBlock}>
             <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 12, color: 'var(--color-orange)', marginBottom: 4 }}>
@@ -637,6 +655,7 @@ export function HomePage({ navigate }: Props) {
               The higher your score, the bigger the bonus. Keep your kill streak going!
             </div>
           </div>
+          </div>}
         </section>
       </div>
 
