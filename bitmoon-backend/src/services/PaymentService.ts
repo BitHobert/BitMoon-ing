@@ -164,8 +164,8 @@ export class PaymentService {
         const provider      = OPNetService.getInstance().getProvider();
 
         // The transaction may not be indexed yet (just broadcast, still in mempool).
-        // Retry a few times with short delays before falling back to trust mode.
-        const MAX_RETRIES  = 3;
+        // Retry with short delays before rejecting.
+        const MAX_RETRIES  = 8;
         const RETRY_DELAY  = 2500; // ms
 
         let tx: Awaited<ReturnType<typeof provider.getTransaction>> | null = null;
