@@ -205,14 +205,24 @@ export class PaymentService {
         const entryWallet = Config.PRIZE_CONTRACT_ADDRESS.toLowerCase();
         const tokenAddr   = Config.ENTRY_TOKEN_ADDRESS.toLowerCase();
 
-        // Use rawEvents — keyed by original hex address (0x6bee…).
-        // receipt.events keys are converted to P2OP format and won't match.
+        // Debug: log receipt structure to diagnose event matching
+        console.log('[PaymentService] Receipt found. revert:', receipt.revert, 'failed:', receipt.failed);
+        console.log('[PaymentService] events keys:', Object.keys(receipt.events ?? {}));
+        console.log('[PaymentService] rawEvents keys:', Object.keys(receipt.rawEvents ?? {}));
+        console.log('[PaymentService] Looking for tokenAddr:', tokenAddr);
+        console.log('[PaymentService] Looking for entryWallet:', entryWallet);
+
+        // Try rawEvents first (keyed by original hex address), fall back to events
         const contractEvents = receipt.rawEvents ?? receipt.events;
+        console.log('[PaymentService] Using contractEvents keys:', Object.keys(contractEvents ?? {}));
+
         if (contractEvents) {
             for (const [contractAddr, events] of Object.entries(contractEvents)) {
+                console.log('[PaymentService] Checking contractAddr:', contractAddr, 'vs tokenAddr:', tokenAddr, 'match:', contractAddr.toLowerCase() === tokenAddr);
                 if (contractAddr.toLowerCase() !== tokenAddr) continue;
 
                 for (const event of events) {
+                    console.log('[PaymentService] Event type:', event.type, 'data length:', event.data?.length);
                     if (event.type !== 'Transferred') continue;
 
                     try {
@@ -221,12 +231,13 @@ export class PaymentService {
                             TRANSFERRED_EVENT_TYPES as unknown as ABIDataTypes[],
                         ) as [Address, Address, Address, bigint];
 
-                        const [, , to, amount] = decoded;
+                        const [_operator, _from, to, amount] = decoded;
+                        console.log('[PaymentService] Decoded: to=', to.toString(), 'amount=', amount.toString(), 'entryWallet=', entryWallet, 'match:', to.toString().toLowerCase() === entryWallet);
                         if (to.toString().toLowerCase() === entryWallet) {
                             amountPaid += amount;
                         }
-                    } catch {
-                        // Malformed event — skip
+                    } catch (decodeErr) {
+                        console.error('[PaymentService] Decode error:', decodeErr);
                     }
                 }
             }
