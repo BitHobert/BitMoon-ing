@@ -165,8 +165,8 @@ export class PaymentService {
 
         // Use getTransactionReceipt — more reliable than getTransaction for OP-20
         // interactions on testnet. The receipt contains the parsed events we need.
-        const MAX_RETRIES  = 8;
-        const RETRY_DELAY  = 2500; // ms
+        const MAX_RETRIES  = 15;
+        const RETRY_DELAY  = 3000; // ms — testnet indexing can take 30-45s
 
         let receipt: Awaited<ReturnType<typeof provider.getTransactionReceipt>> | null = null;
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
