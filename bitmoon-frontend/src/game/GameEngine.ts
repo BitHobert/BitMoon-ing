@@ -30,7 +30,7 @@ export class GameEngine {
   private readonly bossHpPool = new Map<number, number>();
   private readonly boundKeyDown: (e: KeyboardEvent) => void;
   private readonly boundKeyUp:   (e: KeyboardEvent) => void;
-  // PNG sprite cache — keyed by path under /public (e.g. 'sprites/enemy3.png')
+  // Sprite cache — keyed by path under /public (e.g. 'sprites/enemy3.webp')
   private readonly sprites = new Map<string, HTMLImageElement>();
   // Optional audio engine — set by GameCanvas after construction
   public audio?: AudioEngine;
@@ -852,13 +852,13 @@ export class GameEngine {
       ctx.globalAlpha = alpha;
       const pImg = m.spriteId ? this.sprites.get(m.spriteId) : null;
       if (pImg?.complete && pImg.naturalWidth > 0) {
-        const pw = m.spriteId === 'sprites/planet-saturn.png' ? 200 : 160;
+        const pw = m.spriteId === 'sprites/planet-saturn.webp' ? 200 : 160;
         ctx.drawImage(pImg, m.x - pw / 2, m.y - pw / 2, pw, pw);
-      } else if (m.spriteId === 'sprites/planet-nebula.png') {
+      } else if (m.spriteId === 'sprites/planet-nebula.webp') {
         this.drawPurplePlanet(ctx, m.x, m.y);
-      } else if (m.spriteId === 'sprites/planet-inferno.png') {
+      } else if (m.spriteId === 'sprites/planet-inferno.webp') {
         this.drawInfernoPlanet(ctx, m.x, m.y);
-      } else if (m.spriteId === 'sprites/planet-saturn.png') {
+      } else if (m.spriteId === 'sprites/planet-saturn.webp') {
         this.drawSaturnPlanet(ctx, m.x, m.y);
       } else {
         ctx.font = '76px serif';

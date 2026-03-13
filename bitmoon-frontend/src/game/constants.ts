@@ -22,16 +22,16 @@ export interface PlanetConfig {
   readonly penalty:  number;   // points lost if enemy destroys it
   readonly hp:       number;   // hits to destroy (very tanky)
   readonly label:    string;   // shown in HUD hint
-  readonly spriteId?: string;  // path under /public — if set, use PNG sprite
+  readonly spriteId?: string;  // path under /public — if set, use sprite
 }
 
 export const PLANETS: Record<string, PlanetConfig> = {
-  moon:     { glyph: '🌕', penalty:  7_000, hp:  5, label: 'MOON',      spriteId: 'sprites/planet-moon.png'     },
-  nebula:   { glyph: '🌍', penalty: 10_000, hp:  5, label: 'NEBULA',    spriteId: 'sprites/planet-nebula.png'   },
-  inferno:  { glyph: '🌎', penalty: 15_000, hp:  8, label: 'INFERNO',   spriteId: 'sprites/planet-inferno.png'  },
-  earth:    { glyph: '🌏', penalty: 20_000, hp:  8, label: 'EARTH',     spriteId: 'sprites/planet-earth.png'    },
-  saturn:   { glyph: '🪐', penalty: 25_000, hp: 10, label: 'SATURN',    spriteId: 'sprites/planet-saturn.png'   },
-  darkmoon: { glyph: '🌑', penalty: 40_000, hp: 13, label: 'DARK MOON', spriteId: 'sprites/planet-darkmoon.png' },
+  moon:     { glyph: '🌕', penalty:  7_000, hp:  5, label: 'MOON',      spriteId: 'sprites/planet-moon.webp'     },
+  nebula:   { glyph: '🌍', penalty: 10_000, hp:  5, label: 'NEBULA',    spriteId: 'sprites/planet-nebula.webp'   },
+  inferno:  { glyph: '🌎', penalty: 15_000, hp:  8, label: 'INFERNO',   spriteId: 'sprites/planet-inferno.webp'  },
+  earth:    { glyph: '🌏', penalty: 20_000, hp:  8, label: 'EARTH',     spriteId: 'sprites/planet-earth.webp'    },
+  saturn:   { glyph: '🪐', penalty: 25_000, hp: 10, label: 'SATURN',    spriteId: 'sprites/planet-saturn.webp'   },
+  darkmoon: { glyph: '🌑', penalty: 40_000, hp: 13, label: 'DARK MOON', spriteId: 'sprites/planet-darkmoon.webp' },
 };
 
 /**
@@ -70,15 +70,15 @@ export interface TierConfig {
   readonly speedFactor: number;    // multiplier on base enemy speed
   readonly firesBack:   boolean;   // can shoot at player
   readonly ySine:       number;    // y-oscillation amplitude (0 = straight line)
-  readonly sprite?:     string;    // path under /public — if set, use PNG sprite
+  readonly sprite?:     string;    // path under /public — if set, use sprite
 }
 
 export const TIER_CONFIGS: Record<TierNumber, TierConfig> = {
-  1: { tier: 1, glyph: '👾', hp: 1, basePoints: 100,  burnUnits: 100_000_000n,    speedFactor: 1.0, firesBack: false, ySine: 0,  sprite: 'sprites/enemy1.png' },
-  2: { tier: 2, glyph: '🛸', hp: 2, basePoints: 300,  burnUnits: 500_000_000n,    speedFactor: 1.2, firesBack: false, ySine: 30, sprite: 'sprites/enemy2.png' },
-  3: { tier: 3, glyph: '🐍', hp: 3, basePoints: 750,  burnUnits: 1_000_000_000n,  speedFactor: 1.4, firesBack: true,  ySine: 50, sprite: 'sprites/enemy3.png' },
-  4: { tier: 4, glyph: '🚀', hp: 5, basePoints: 1500, burnUnits: 5_000_000_000n,  speedFactor: 1.6, firesBack: true,  ySine: 20, sprite: 'sprites/enemy4.png' },
-  5: { tier: 5, glyph: '💀', hp: 8, basePoints: 3000, burnUnits: 10_000_000_000n, speedFactor: 2.0, firesBack: true,  ySine: 0,  sprite: 'sprites/enemy5.png' },
+  1: { tier: 1, glyph: '👾', hp: 1, basePoints: 100,  burnUnits: 100_000_000n,    speedFactor: 1.0, firesBack: false, ySine: 0,  sprite: 'sprites/enemy1.webp' },
+  2: { tier: 2, glyph: '🛸', hp: 2, basePoints: 300,  burnUnits: 500_000_000n,    speedFactor: 1.2, firesBack: false, ySine: 30, sprite: 'sprites/enemy2.webp' },
+  3: { tier: 3, glyph: '🐍', hp: 3, basePoints: 750,  burnUnits: 1_000_000_000n,  speedFactor: 1.4, firesBack: true,  ySine: 50, sprite: 'sprites/enemy3.webp' },
+  4: { tier: 4, glyph: '🚀', hp: 5, basePoints: 1500, burnUnits: 5_000_000_000n,  speedFactor: 1.6, firesBack: true,  ySine: 20, sprite: 'sprites/enemy4.webp' },
+  5: { tier: 5, glyph: '💀', hp: 8, basePoints: 3000, burnUnits: 10_000_000_000n, speedFactor: 2.0, firesBack: true,  ySine: 0,  sprite: 'sprites/enemy5.webp' },
 };
 
 export const BASE_ENEMY_SPEED = 1.4; // px/frame at speedFactor 1.0
@@ -96,7 +96,7 @@ export interface BossConfig {
   readonly fireRate:     number;   // frames between shots
   readonly bulletSpread: number;   // bullets per shot (spread fan)
   readonly duration:     number;   // frames before retreat if still alive
-  readonly sprite?:      string;   // path under /public — if set, use PNG sprite
+  readonly sprite?:      string;   // path under /public — if set, use sprite
 }
 
 export const BOSS_POOL: BossConfig[] = [
@@ -111,7 +111,7 @@ export const BOSS_POOL: BossConfig[] = [
     fireRate:     35,
     bulletSpread: 1,
     duration:     1200,   // 20 s at 60 fps
-    sprite:       'sprites/boss-devourer.png',
+    sprite:       'sprites/boss-devourer.webp',
   },
   {
     name:         'ABDUCTOR',
@@ -124,7 +124,7 @@ export const BOSS_POOL: BossConfig[] = [
     fireRate:     28,
     bulletSpread: 1,
     duration:     1200,
-    sprite:       'sprites/boss-abductor.png',
+    sprite:       'sprites/boss-abductor.webp',
   },
   {
     name:         'OVERLORD',
@@ -137,7 +137,7 @@ export const BOSS_POOL: BossConfig[] = [
     fireRate:     22,
     bulletSpread: 1,
     duration:     1200,
-    sprite:       'sprites/boss-overlord.png',
+    sprite:       'sprites/boss-overlord.webp',
   },
   {
     name:         'WATCHER',
@@ -150,7 +150,7 @@ export const BOSS_POOL: BossConfig[] = [
     fireRate:     18,
     bulletSpread: 2,
     duration:     1200,
-    sprite:       'sprites/boss-watcher.png',
+    sprite:       'sprites/boss-watcher.webp',
   },
   // Add more bosses here — they cycle every 5 waves
 ];

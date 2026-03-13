@@ -9,23 +9,23 @@ import { useMemo } from 'react';
 // All available sprites from /public/sprites/
 const SPRITE_POOL = [
   // Enemies
-  'sprites/enemy1.png',
-  'sprites/enemy2.png',
-  'sprites/enemy3.png',
-  'sprites/enemy4.png',
-  'sprites/enemy5.png',
+  'sprites/enemy1.webp',
+  'sprites/enemy2.webp',
+  'sprites/enemy3.webp',
+  'sprites/enemy4.webp',
+  'sprites/enemy5.webp',
   // Planets
-  'sprites/planet-moon.png',
-  'sprites/planet-nebula.png',
-  'sprites/planet-earth.png',
-  'sprites/planet-saturn.png',
-  'sprites/planet-darkmoon.png',
-  'sprites/planet-inferno.png',
+  'sprites/planet-moon.webp',
+  'sprites/planet-nebula.webp',
+  'sprites/planet-earth.webp',
+  'sprites/planet-saturn.webp',
+  'sprites/planet-darkmoon.webp',
+  'sprites/planet-inferno.webp',
   // Bosses
-  'sprites/boss-devourer.png',
-  'sprites/boss-abductor.png',
-  'sprites/boss-overlord.png',
-  'sprites/boss-watcher.png',
+  'sprites/boss-devourer.webp',
+  'sprites/boss-abductor.webp',
+  'sprites/boss-overlord.webp',
+  'sprites/boss-watcher.webp',
 ];
 
 // Deterministic "random" using a seed so elements don't reshuffle on re-render
