@@ -205,7 +205,9 @@ export class PaymentService {
         const entryWallet = Config.PRIZE_CONTRACT_ADDRESS.toLowerCase();
         const tokenAddr   = Config.ENTRY_TOKEN_ADDRESS.toLowerCase();
 
-        const contractEvents = receipt.events;
+        // Use rawEvents — keyed by original hex address (0x6bee…).
+        // receipt.events keys are converted to P2OP format and won't match.
+        const contractEvents = receipt.rawEvents ?? receipt.events;
         if (contractEvents) {
             for (const [contractAddr, events] of Object.entries(contractEvents)) {
                 if (contractAddr.toLowerCase() !== tokenAddr) continue;
