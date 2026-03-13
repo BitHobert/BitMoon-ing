@@ -12,7 +12,7 @@ import {
     type IPrizeDistributorContract,
     type SponsorBonusDepositedEventData,
 } from '../contracts/PrizeDistributorABI.js';
-import type { PrizeDistribution, SponsorBonus, SponsorLink, TournamentEntry, TournamentType } from '../types/index.js';
+import type { PrizeDistribution, PrizeShare, SponsorBonus, SponsorLink, TournamentEntry, TournamentType } from '../types/index.js';
 
 type DistributionDoc = PrizeDistribution;
 
@@ -185,6 +185,7 @@ export class PrizeDistributorService {
         amount: bigint,
         decimals: number = 8,
         links: SponsorLink[] = [],
+        prizeShares: PrizeShare[] = [{ place: 1, percent: 100 }],
     ): Promise<SponsorBonus> {
         let txid = '';
         let slotIndex = 0;
@@ -242,6 +243,7 @@ export class PrizeDistributorService {
             amount:         amount.toString(),
             decimals,
             links:          links.slice(0, 3),
+            prizeShares:    prizeShares.length > 0 ? prizeShares : [{ place: 1, percent: 100 }],
             slotIndex,
             txHash:         txid || 'off-chain',
             depositedAt:    Date.now(),
@@ -412,6 +414,19 @@ export class PrizeDistributorService {
             console.error('[PrizeDistributorService] Dev cut transfer failed:', err);
         }
 
+        // ── Sponsor Bonus Token Distribution ──────────────────────────────
+        // Send any sponsor-deposited tokens (M2M, MOTO, etc.) to the winners.
+        // Same 70/20/10 split as the LFGT prize pool.
+        const sponsorTxIds: string[] = [];
+        if (winners.length > 0) {
+            try {
+                const txIds = await this.sendSponsorBonusPrizes(type, periodKey, winners);
+                sponsorTxIds.push(...txIds);
+            } catch (err) {
+                console.error('[PrizeDistributorService] Sponsor bonus distribution failed:', err);
+            }
+        }
+
         const doc: PrizeDistribution = {
             _id:            randomUUID(),
             tournamentType: type,
@@ -424,6 +439,7 @@ export class PrizeDistributorService {
             btcTxIds,
             tokenTxIds,
             ...(devCutTxId ? { devCutTxId } : {}),
+            ...(sponsorTxIds.length > 0 ? { sponsorTxIds } : {}),
         };
 
         try {
@@ -679,6 +695,121 @@ export class PrizeDistributorService {
         }
     }
 
+    // ── Sponsor Bonus Prize Distribution ─────────────────────────────────────
+
+    /**
+     * Send sponsor bonus tokens to winners for a given tournament period.
+     *
+     * Each sponsor bonus has its own `prizeShares` config (e.g. 100% to 1st,
+     * or 60/30/10 to top 3). Each bonus is processed individually — no grouping.
+     *
+     * 1. Fetches all sponsor bonuses for the period from MongoDB.
+     * 2. For each bonus, creates an OP-20 contract for that token.
+     * 3. Splits the bonus amount according to its `prizeShares` config.
+     * 4. Sends each portion via OP-20 contract.transfer().
+     *
+     * Returns an array of "tokenSymbol:txId" strings for all successful transfers.
+     */
+    private async sendSponsorBonusPrizes(
+        type: TournamentType,
+        periodKey: string,
+        winners: Array<{ place: 1 | 2 | 3; address: string }>,
+    ): Promise<string[]> {
+        const bonuses = await this.getBonusesForPeriod(type, periodKey);
+        if (bonuses.length === 0) return [];
+
+        const txIds: string[] = [];
+        const provider = OPNetService.getInstance().getProvider();
+
+        // Build a quick lookup: place → winner address
+        const winnerByPlace = new Map<number, string>();
+        for (const w of winners) {
+            winnerByPlace.set(w.place, w.address);
+        }
+
+        for (const bonus of bonuses) {
+            const total = BigInt(bonus.amount);
+            if (total <= 0n) continue;
+
+            // Default prizeShares: 100% to 1st place (backward-compatible)
+            const shares: PrizeShare[] = (bonus.prizeShares && bonus.prizeShares.length > 0)
+                ? bonus.prizeShares
+                : [{ place: 1, percent: 100 }];
+
+            // Create an OP-20 contract instance for this sponsor token
+            let sponsorContract: IOP20Contract;
+            try {
+                const contractAddress = bonus.tokenAddress.startsWith('0x')
+                    ? Address.fromString(bonus.tokenAddress)
+                    : await this.resolveAddress(bonus.tokenAddress, true);
+
+                sponsorContract = getContract<IOP20Contract>(
+                    contractAddress,
+                    OP_20_ABI,
+                    provider,
+                    Config.NETWORK,
+                    this.operatorAddress,
+                );
+            } catch (err) {
+                console.error(
+                    `[PrizeDistributorService] Failed to create contract for sponsor token ${bonus.tokenSymbol} (${bonus.tokenAddress}):`,
+                    err,
+                );
+                continue;
+            }
+
+            // Send each share to the corresponding winner
+            for (const share of shares) {
+                if (share.percent <= 0) continue;
+
+                const winnerAddress = winnerByPlace.get(share.place);
+                if (!winnerAddress) {
+                    // No player finished in this place — skip (e.g. only 1 player but shares include 2nd)
+                    console.log(
+                        `[PrizeDistributorService] No winner for place ${share.place} — skipping ${bonus.tokenSymbol} ${share.percent}% share`,
+                    );
+                    continue;
+                }
+
+                const prizeAmount = total * BigInt(share.percent) / 100n;
+                if (prizeAmount <= 0n) continue;
+
+                try {
+                    const recipientAddress = await this.resolveAddress(winnerAddress);
+                    const sim = await sponsorContract.transfer(recipientAddress, prizeAmount);
+
+                    if (sim.revert) {
+                        console.error(
+                            `[PrizeDistributorService] Sponsor token transfer reverted: ${bonus.tokenSymbol} #${share.place} (${share.percent}%) → ${winnerAddress}: ${sim.revert}`,
+                        );
+                        continue;
+                    }
+
+                    const receipt = await sim.sendTransaction(this.txParams());
+                    txIds.push(`${bonus.tokenSymbol}:${receipt.transactionId}`);
+
+                    console.log(
+                        `[PrizeDistributorService] Sponsor prize sent: ${bonus.tokenSymbol} #${share.place} (${share.percent}%) → ${winnerAddress} (${prizeAmount} raw units) tx: ${receipt.transactionId}`,
+                    );
+                } catch (err) {
+                    console.error(
+                        `[PrizeDistributorService] Sponsor token transfer failed: ${bonus.tokenSymbol} #${share.place} → ${winnerAddress}:`,
+                        err,
+                    );
+                    // Continue to next — one failure should not block others
+                }
+            }
+        }
+
+        if (txIds.length > 0) {
+            console.log(
+                `[PrizeDistributorService] Sponsor bonus distribution complete for ${type}/${periodKey}: ${txIds.length} transfers`,
+            );
+        }
+
+        return txIds;
+    }
+
     // ── Sponsor bonus rollforward ────────────────────────────────────────────
 
     /**
@@ -711,6 +842,7 @@ export class PrizeDistributorService {
             amount:         b.amount,
             decimals:       b.decimals ?? 8,
             links:          b.links ?? [],
+            prizeShares:    b.prizeShares ?? [{ place: 1, percent: 100 }],
             slotIndex:      existingCount + i,
             txHash:         'rolled-forward',
             depositedAt:    Date.now(),

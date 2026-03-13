@@ -14,6 +14,11 @@ export interface SponsorLink {
   readonly url: string;
 }
 
+export interface PrizeShare {
+  readonly place: number;
+  readonly percent: number;
+}
+
 export interface GameEvent {
   readonly tick: number;
   readonly type: GameEventType;
@@ -50,7 +55,7 @@ export interface TournamentInfo {
   readonly nextStartBlock: string;
   readonly isActive: boolean;
   readonly pendingPool: string;
-  readonly sponsorBonuses?: ReadonlyArray<{ readonly tokenAddress: string; readonly tokenSymbol: string; readonly amount: string; readonly decimals: number; readonly links: SponsorLink[] }>;
+  readonly sponsorBonuses?: ReadonlyArray<{ readonly tokenAddress: string; readonly tokenSymbol: string; readonly amount: string; readonly decimals: number; readonly links: SponsorLink[]; readonly prizeShares: PrizeShare[] }>;
 }
 
 export interface PrizeDistribution {
@@ -67,6 +72,7 @@ export interface PrizeDistribution {
   readonly totalPrize: string;
   readonly distributedAt: number;
   readonly blockNumber: string;
+  readonly sponsorTxIds?: string[];
 }
 
 export interface PlayerStats {
@@ -169,6 +175,7 @@ export interface SponsorBonusRequest {
   readonly amount: string;
   readonly decimals?: number;
   readonly links?: SponsorLink[];
+  readonly prizeShares?: PrizeShare[];
 }
 
 export interface SponsorBonus {
@@ -180,6 +187,7 @@ export interface SponsorBonus {
   readonly amount: string;
   readonly decimals: number;
   readonly links: SponsorLink[];
+  readonly prizeShares: PrizeShare[];
   readonly slotIndex: number;
   readonly txHash: string;
   readonly depositedAt: number;

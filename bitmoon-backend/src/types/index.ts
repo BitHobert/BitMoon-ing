@@ -257,7 +257,7 @@ export interface TournamentInfo {
      */
     readonly pendingPool: string;
     /** Sponsor bonuses deposited for this tournament period (if any) */
-    readonly sponsorBonuses?: ReadonlyArray<{ readonly tokenAddress: string; readonly tokenSymbol: string; readonly amount: string; readonly decimals: number; readonly links: SponsorLink[] }>;
+    readonly sponsorBonuses?: ReadonlyArray<{ readonly tokenAddress: string; readonly tokenSymbol: string; readonly amount: string; readonly decimals: number; readonly links: SponsorLink[]; readonly prizeShares: PrizeShare[] }>;
 }
 
 export interface PrizeDistribution {
@@ -284,6 +284,11 @@ export interface PrizeDistribution {
     readonly tokenTxIds?: string[];
     /** Transaction ID of the 5 % dev cut transfer to DEV_WALLET_ADDRESS (if sent) */
     readonly devCutTxId?: string;
+    /**
+     * Sponsor bonus token transfer transaction IDs (one entry per successful transfer).
+     * Each string is formatted as "tokenSymbol:txId" for easy identification.
+     */
+    readonly sponsorTxIds?: string[];
 }
 
 // ─── Sponsor Bonus ────────────────────────────────────────────────────────────
@@ -295,6 +300,19 @@ export type SponsorPlatform = 'x' | 'telegram' | 'website' | 'instagram' | 'disc
 export interface SponsorLink {
     readonly platform: SponsorPlatform;
     readonly url: string;
+}
+
+/**
+ * Defines how a sponsor bonus is split among winners.
+ * Each entry assigns a percentage of the total bonus to a finishing place.
+ * Percentages must sum to 100.
+ * Currently supports places 1–3; designed to expand to top 10 in the future.
+ */
+export interface PrizeShare {
+    /** Finishing place (1 = 1st, 2 = 2nd, 3 = 3rd) */
+    readonly place: number;
+    /** Percentage of the total bonus this place receives (0–100) */
+    readonly percent: number;
 }
 
 /**
@@ -320,6 +338,11 @@ export interface SponsorBonusRequest {
     readonly decimals?: number;
     /** Optional sponsor links (up to 3) — displayed as icons on the tournament page */
     readonly links?: SponsorLink[];
+    /**
+     * How the bonus is split among winners (default: 100% to 1st place).
+     * Percentages must sum to 100. Places limited to 1–3 for now.
+     */
+    readonly prizeShares?: PrizeShare[];
 }
 
 /**
@@ -341,6 +364,8 @@ export interface SponsorBonus {
     readonly decimals: number;
     /** Sponsor links (up to 3) */
     readonly links: SponsorLink[];
+    /** How the bonus is split among winners. Default: [{ place: 1, percent: 100 }] */
+    readonly prizeShares: PrizeShare[];
     /** On-chain slot index assigned by the contract (0-based) */
     readonly slotIndex: number;
     /** On-chain depositBonus() transaction hash */

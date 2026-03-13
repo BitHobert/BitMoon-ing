@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { NavigateFn } from '../App';
-import type { TournamentType, SponsorBonus, SponsorPlatform, SponsorLink } from '../types';
+import type { TournamentType, SponsorBonus, SponsorPlatform, SponsorLink, PrizeShare } from '../types';
 import { adminDepositBonus, adminGetBonuses } from '../api/http';
 import { SponsorIcons } from '../components/SponsorIcons';
 
@@ -45,6 +45,7 @@ export function AdminPage({ navigate }: Props) {
   const [depositAmount, setDepositAmount]     = useState('');
   const [depositDecimals, setDepositDecimals] = useState(8);
   const [depositLinks, setDepositLinks]       = useState<LinkRow[]>([]);
+  const [depositShares, setDepositShares]     = useState<PrizeShare[]>([{ place: 1, percent: 100 }]);
   const [depositStatus, setDepositStatus]     = useState<{ ok: boolean; msg: string } | null>(null);
   const [depositing, setDepositing]           = useState(false);
 
@@ -79,6 +80,7 @@ export function AdminPage({ navigate }: Props) {
         amount: rawAmount,
         decimals: depositDecimals,
         ...(links.length > 0 ? { links } : {}),
+        prizeShares: depositShares,
       });
       setDepositStatus({ ok: true, msg: `Deposited! Slot #${result.bonus.slotIndex} — tx: ${truncate(result.bonus.txHash, 20)}` });
       setDepositAmount('');
@@ -328,11 +330,118 @@ export function AdminPage({ navigate }: Props) {
             </div>
           </div>
 
+          {/* ── Prize Distribution ──────────────────────────────────── */}
+          <div>
+            <label style={labelStyle}>PRIZE DISTRIBUTION</label>
+            {/* Presets */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-blue"
+                style={{
+                  fontSize: 8, padding: '5px 12px',
+                  ...(depositShares.length === 1 && depositShares[0].place === 1 && depositShares[0].percent === 100
+                    ? { background: 'rgba(0,212,255,0.15)', boxShadow: '0 0 8px rgba(0,212,255,0.3)' } : {}),
+                }}
+                onClick={() => setDepositShares([{ place: 1, percent: 100 }])}
+              >
+                1ST ONLY (100%)
+              </button>
+              <button
+                type="button"
+                className="btn btn-blue"
+                style={{
+                  fontSize: 8, padding: '5px 12px',
+                  ...(depositShares.length === 3
+                    && depositShares[0]?.percent === 70
+                    && depositShares[1]?.percent === 20
+                    && depositShares[2]?.percent === 10
+                    ? { background: 'rgba(0,212,255,0.15)', boxShadow: '0 0 8px rgba(0,212,255,0.3)' } : {}),
+                }}
+                onClick={() => setDepositShares([
+                  { place: 1, percent: 70 },
+                  { place: 2, percent: 20 },
+                  { place: 3, percent: 10 },
+                ])}
+              >
+                TOP 3 (70/20/10)
+              </button>
+            </div>
+            {/* Share rows */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {depositShares.map((share, idx) => (
+                <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{
+                    fontFamily: 'var(--font-pixel)', fontSize: 8,
+                    color: share.place === 1 ? '#FFD700' : share.place === 2 ? '#C0C0C0' : '#CD7F32',
+                    minWidth: 30, textAlign: 'center',
+                  }}>
+                    {share.place === 1 ? '🥇' : share.place === 2 ? '🥈' : '🥉'} {share.place}
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={share.percent}
+                    onChange={e => {
+                      const next = [...depositShares];
+                      next[idx] = { ...share, percent: Math.max(0, Math.min(100, Number(e.target.value) || 0)) };
+                      setDepositShares(next);
+                    }}
+                    style={{ ...inputStyle, width: 80, flex: 'none', textAlign: 'center' }}
+                  />
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--color-text-dim)' }}>%</span>
+                  {depositShares.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setDepositShares(depositShares.filter((_, i) => i !== idx))}
+                      style={{
+                        background: 'none', border: 'none', color: 'var(--color-red)',
+                        cursor: 'pointer', fontSize: 14, padding: '4px 8px', lineHeight: 1,
+                      }}
+                      title="Remove place"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+              {depositShares.length < 3 && (
+                <button
+                  type="button"
+                  className="btn btn-blue"
+                  style={{ fontSize: 8, padding: '6px 14px', alignSelf: 'flex-start' }}
+                  onClick={() => {
+                    const nextPlace = (depositShares.length + 1) as 1 | 2 | 3;
+                    setDepositShares([...depositShares, { place: nextPlace, percent: 0 }]);
+                  }}
+                >
+                  + ADD PLACE
+                </button>
+              )}
+            </div>
+            {/* Validation: sum must equal 100 */}
+            {(() => {
+              const sum = depositShares.reduce((s, sh) => s + sh.percent, 0);
+              return sum !== 100 ? (
+                <div style={{
+                  marginTop: 6, padding: '4px 10px', borderRadius: 4, fontSize: 9,
+                  fontFamily: 'var(--font-mono)',
+                  background: 'rgba(255,59,59,0.08)',
+                  border: '1px solid rgba(255,59,59,0.3)',
+                  color: 'var(--color-red)',
+                }}>
+                  ⚠ Percentages sum to {sum}% — must equal 100%
+                </div>
+              ) : null;
+            })()}
+          </div>
+
           <button
             className="btn btn-solid-orange"
             style={{ fontSize: 9, alignSelf: 'flex-start', padding: '10px 24px' }}
             onClick={handleDeposit}
-            disabled={depositing || !depositPeriodKey || !depositToken || !depositSymbol || !depositAmount}
+            disabled={depositing || !depositPeriodKey || !depositToken || !depositSymbol || !depositAmount || depositShares.reduce((s, sh) => s + sh.percent, 0) !== 100}
           >
             {depositing ? 'DEPOSITING…' : 'DEPOSIT BONUS'}
           </button>
@@ -407,7 +516,7 @@ export function AdminPage({ navigate }: Props) {
                 }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                      {['SLOT', 'SYMBOL', 'TOKEN', 'AMOUNT', 'LINKS', 'TX HASH', 'DATE'].map(h => (
+                      {['SLOT', 'SYMBOL', 'TOKEN', 'AMOUNT', 'SPLIT', 'LINKS', 'TX HASH', 'DATE'].map(h => (
                         <th key={h} style={{
                           padding: '8px 6px', textAlign: 'left',
                           fontFamily: 'var(--font-pixel)', fontSize: 7,
@@ -431,6 +540,11 @@ export function AdminPage({ navigate }: Props) {
                         </td>
                         <td style={{ padding: '6px', color: 'var(--color-green)' }}>
                           {formatTokens(b.amount, b.decimals ?? 8)}
+                        </td>
+                        <td style={{ padding: '6px', color: 'var(--color-blue)', fontFamily: 'var(--font-pixel)', fontSize: 7 }}>
+                          {(b.prizeShares && b.prizeShares.length > 0)
+                            ? b.prizeShares.map(s => `#${s.place}:${s.percent}%`).join(' ')
+                            : '#1:100%'}
                         </td>
                         <td style={{ padding: '6px' }}>
                           {b.links && b.links.length > 0
