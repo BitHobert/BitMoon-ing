@@ -11,15 +11,23 @@ import { PaymentService } from '../services/PaymentService.js';
 import { PrizeDistributorService } from '../services/PrizeDistributorService.js';
 import { OPNetService } from '../services/OPNetService.js';
 import { RateLimiter, RATE_LIMITS, type RateLimitConfig } from './RateLimiter.js';
+import type { ZodSchema } from 'zod';
 import type {
     GameEvent,
     LeaderboardPeriod,
     LeaderboardType,
     SessionEndRequest,
-    SessionStartRequest,
-    SponsorBonusRequest,
     TournamentType,
 } from '../types/index.js';
+import {
+    SessionStartSchema,
+    CreateGameSessionSchema,
+    SessionEndSchema,
+    TournamentEnterSchema,
+    AdminSnapshotSchema,
+    AdminUpdateFeeSchema,
+    AdminSponsorBonusSchema,
+} from '../validators/schemas.js';
 
 type Req = HyperExpress.Request;
 type Res = HyperExpress.Response;
@@ -274,15 +282,14 @@ export class ApiServer {
     }
 
     private async handleSessionStart(req: Req, res: Res): Promise<void> {
-        let body: SessionStartRequest & { tournamentType?: TournamentType; publicKey?: string };
-        try { body = await req.json() as typeof body; }
+        let raw: unknown;
+        try { raw = await req.json(); }
         catch { res.status(400).json({ error: 'Invalid JSON body' }); return; }
 
+        const body = this.validate(SessionStartSchema, raw, res);
+        if (!body) return;
+
         const { playerAddress, signature, message, tournamentType, publicKey } = body;
-        if (!playerAddress || !signature || !message) {
-            res.status(400).json({ error: 'Missing playerAddress, signature, or message' });
-            return;
-        }
 
         if (!this.auth.verifySignature(playerAddress, message, signature, publicKey)) {
             res.status(401).json({ error: 'Invalid signature' });
@@ -311,11 +318,13 @@ export class ApiServer {
             return;
         }
 
-        let body: { tournamentType?: TournamentType };
-        try { body = await req.json() as typeof body; }
-        catch { body = {}; }
+        let raw: unknown;
+        try { raw = await req.json(); }
+        catch { raw = {}; }
 
-        const { tournamentType } = body;
+        const body = this.validate(CreateGameSessionSchema, raw, res);
+        if (body === null) return;  // validation failed
+        const tournamentType = body?.tournamentType;
 
         try {
             const session = await this.sessions.createSession(playerAddress, tournamentType);
@@ -348,15 +357,14 @@ export class ApiServer {
             return;
         }
 
-        let body: { sessionId: string; events: GameEvent[]; clientScore: number; clientBurned: string };
-        try { body = await req.json() as typeof body; }
+        let raw: unknown;
+        try { raw = await req.json(); }
         catch { res.status(400).json({ error: 'Invalid JSON body' }); return; }
 
+        const body = this.validate(SessionEndSchema, raw, res);
+        if (!body) return;
+
         const { sessionId, events, clientScore, clientBurned } = body;
-        if (!sessionId || !events || clientScore === undefined || !clientBurned) {
-            res.status(400).json({ error: 'Missing required fields' });
-            return;
-        }
 
         if (Config.DEV_MODE) {
             const activeCount = this.sessions.activeCount;
@@ -372,7 +380,7 @@ export class ApiServer {
         const endReq: SessionEndRequest = {
             sessionId,
             playerAddress,
-            events,
+            events: events as GameEvent[],
             clientScore,
             clientBurned: BigInt(clientBurned),
         };
@@ -492,20 +500,15 @@ export class ApiServer {
             return;
         }
 
-        let body: { tournamentType: TournamentType; txHash: string; quantity?: number };
-        try { body = await req.json() as typeof body; }
+        let raw: unknown;
+        try { raw = await req.json(); }
         catch { res.status(400).json({ error: 'Invalid JSON body' }); return; }
 
+        const body = this.validate(TournamentEnterSchema, raw, res);
+        if (!body) return;
+
         const { tournamentType, txHash } = body;
-        const quantity = Math.max(1, Math.min(10, Math.floor(body.quantity ?? 1)));
-        if (!tournamentType || !txHash) {
-            res.status(400).json({ error: 'Missing tournamentType or txHash' });
-            return;
-        }
-        if (!['daily', 'weekly', 'monthly'].includes(tournamentType)) {
-            res.status(400).json({ error: 'tournamentType must be daily | weekly | monthly' });
-            return;
-        }
+        const quantity = body.quantity ?? 1;
 
         // Resolve current period — new purchases only allowed while active
         let key: string;
@@ -519,6 +522,12 @@ export class ApiServer {
         } catch (err: unknown) {
             const statusCode = (err as { statusCode?: number }).statusCode ?? 500;
             res.status(statusCode).json({ error: (err as Error).message });
+            return;
+        }
+
+        // Reject duplicate txHash — prevents reusing one payment for multiple entries
+        if (await this.tournament.txHashExists(txHash)) {
+            res.status(409).json({ error: 'This transaction has already been used for an entry' });
             return;
         }
 
@@ -596,15 +605,14 @@ export class ApiServer {
     private async handleAdminSnapshot(req: Req, res: Res): Promise<void> {
         if (!this.verifyAdmin(req, res)) return;
 
-        let body: { label: string; period: LeaderboardPeriod; type: LeaderboardType; limit?: number };
-        try { body = await req.json() as typeof body; }
+        let raw: unknown;
+        try { raw = await req.json(); }
         catch { res.status(400).json({ error: 'Invalid JSON body' }); return; }
 
+        const body = this.validate(AdminSnapshotSchema, raw, res);
+        if (!body) return;
+
         const { label, period, type, limit } = body;
-        if (!label || !period || !type) {
-            res.status(400).json({ error: 'Missing label, period, or type' });
-            return;
-        }
 
         try {
             const snapshot = await this.giveaway.snapshotLeaderboard(label, period, type, limit);
@@ -638,16 +646,14 @@ export class ApiServer {
             return;
         }
 
-        let body: { amount: string };
-        try { body = await req.json() as typeof body; }
+        let raw: unknown;
+        try { raw = await req.json(); }
         catch { res.status(400).json({ error: 'Invalid JSON body' }); return; }
 
+        const body = this.validate(AdminUpdateFeeSchema, raw, res);
+        if (!body) return;
+
         const { amount } = body;
-        // Validate: must be a positive integer string
-        if (!amount || !/^\d+$/.test(amount) || BigInt(amount) <= 0n) {
-            res.status(400).json({ error: 'amount must be a positive integer string (raw token units)' });
-            return;
-        }
 
         await this.tournament.updateFeeConfig(type, amount);
         const config = await this.tournament.getFeeConfig(type);
@@ -762,32 +768,14 @@ export class ApiServer {
     private async handleAdminDepositBonus(req: Req, res: Res): Promise<void> {
         if (!this.verifyAdmin(req, res)) return;
 
-        let body: SponsorBonusRequest;
-        try { body = await req.json() as SponsorBonusRequest; }
+        let raw: unknown;
+        try { raw = await req.json(); }
         catch { res.status(400).json({ error: 'Invalid JSON body' }); return; }
 
-        const { tournamentType, periodKey, tokenAddress, tokenSymbol, amount, decimals, links, prizeShares } = body;
+        const body = this.validate(AdminSponsorBonusSchema, raw, res);
+        if (!body) return;
 
-        if (!tournamentType || !['daily', 'weekly', 'monthly'].includes(tournamentType)) {
-            res.status(400).json({ error: 'tournamentType must be daily | weekly | monthly' });
-            return;
-        }
-        if (!periodKey || !/^\d+$/.test(periodKey)) {
-            res.status(400).json({ error: 'periodKey must be a non-negative integer string' });
-            return;
-        }
-        if (!tokenAddress || typeof tokenAddress !== 'string' || tokenAddress.trim() === '') {
-            res.status(400).json({ error: 'tokenAddress must be a non-empty string' });
-            return;
-        }
-        if (!tokenSymbol || typeof tokenSymbol !== 'string' || tokenSymbol.trim() === '') {
-            res.status(400).json({ error: 'tokenSymbol must be a non-empty string (e.g. "MOTO")' });
-            return;
-        }
-        if (!amount || !/^\d+$/.test(amount) || BigInt(amount) <= 0n) {
-            res.status(400).json({ error: 'amount must be a positive integer string (raw token units)' });
-            return;
-        }
+        const { tournamentType, periodKey, tokenAddress, tokenSymbol, amount, decimals, links, prizeShares } = body;
 
         try {
             const bonus = await PrizeDistributorService.getInstance()
@@ -865,6 +853,19 @@ export class ApiServer {
             return false;
         }
         return true;
+    }
+
+    /** Parse body against a Zod schema; sends 400 and returns null on failure. */
+    private validate<T>(schema: ZodSchema<T>, body: unknown, res: Res): T | null {
+        const result = (schema as any).safeParse(body);
+        if (!result.success) {
+            const msg = result.error.issues
+                .map((i: { path: (string | number)[]; message: string }) => `${i.path.join('.')}: ${i.message}`)
+                .join('; ');
+            res.status(400).json({ error: `Validation failed: ${msg}` });
+            return null;
+        }
+        return result.data as T;
     }
 
     private onError(_req: Req, res: Res, err: Error): void {

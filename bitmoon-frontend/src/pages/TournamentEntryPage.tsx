@@ -23,7 +23,7 @@ function shortAddr(addr: string) {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type Step = 'review' | 'minting' | 'paying' | 'confirming' | 'done' | 'error';
+type Step = 'review' | 'paying' | 'confirming' | 'done' | 'error';
 
 const TYPE_COLORS: Record<string, string> = {
   daily:   'var(--color-blue)',
@@ -271,17 +271,6 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
               </button>
             </div>
           </>
-        )}
-
-        {step === 'minting' && (
-          <div style={{ textAlign: 'center', padding: '16px 0' }}>
-            <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 9, color: 'var(--color-blue)', marginBottom: 10 }}>
-              🪙 MINTING LFGT…
-            </div>
-            <div style={{ fontFamily: 'var(--font-pixel)', fontSize: 7, color: 'var(--color-text-dim)', lineHeight: 2 }}>
-              Approve the mint transaction in your wallet.
-            </div>
-          </div>
         )}
 
         {step === 'paying' && (

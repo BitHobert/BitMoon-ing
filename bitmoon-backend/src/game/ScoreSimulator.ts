@@ -1,5 +1,5 @@
 import { Config } from '../config/Config.js';
-import { getTierConfig } from './EnemyTiers.js';
+import { getTierConfig, BOSS_POINTS, PLANET_PENALTIES, isBossWave } from './EnemyTiers.js';
 import type { GameEvent, ScoreResult, TierNumber } from '../types/index.js';
 
 /**
@@ -64,9 +64,31 @@ export class ScoreSimulator {
                     if (!event.tier) break;
                     const tier = event.tier as TierNumber;
                     const config = getTierConfig(tier);
-                    // Use client-reported points if available (handles bosses),
-                    // otherwise fall back to tier basePoints for backwards compat
-                    score += event.points ?? config.basePoints;
+
+                    // ── Event-level point validation ──────────────────────────
+                    // Boss kills: tier 5 on boss waves — points must be a known boss value
+                    // Regular kills: points must match the tier's basePoints (or be absent)
+                    if (tier === 5 && isBossWave(event.wave)) {
+                        // Boss kill — validate against known boss point values
+                        if (event.points == null || !BOSS_POINTS.has(event.points)) {
+                            return ScoreSimulator.reject(
+                                sessionId, playerAddress,
+                                `Invalid boss points: ${event.points} on wave ${event.wave}`,
+                            );
+                        }
+                        score += event.points;
+                    } else {
+                        // Regular enemy kill — points must match tier basePoints
+                        const pts = event.points ?? config.basePoints;
+                        if (pts !== config.basePoints) {
+                            return ScoreSimulator.reject(
+                                sessionId, playerAddress,
+                                `Invalid points for tier ${tier}: got ${pts}, expected ${config.basePoints}`,
+                            );
+                        }
+                        score += pts;
+                    }
+
                     kills++;
                     totalBurned += config.burnPerKill;
                     break;
@@ -85,6 +107,14 @@ export class ScoreSimulator {
                 case 'miss': {
                     // Planet destroyed — apply penalty if provided
                     if (event.points && event.points < 0) {
+                        // Validate penalty is a known planet penalty value
+                        const absPenalty = Math.abs(event.points);
+                        if (!PLANET_PENALTIES.has(absPenalty)) {
+                            return ScoreSimulator.reject(
+                                sessionId, playerAddress,
+                                `Invalid planet penalty: ${event.points}`,
+                            );
+                        }
                         score = Math.max(0, score + event.points); // points is negative
                     }
                     break;

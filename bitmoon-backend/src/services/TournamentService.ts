@@ -295,6 +295,12 @@ export class TournamentService {
         );
     }
 
+    /** Check if a payment transaction hash has already been used for an entry. */
+    public async txHashExists(txHash: string): Promise<boolean> {
+        const count = await this.entries.countDocuments({ paymentTxHash: txHash }, { limit: 1 });
+        return count > 0;
+    }
+
     public async recordEntry(data: Omit<TournamentEntry, '_id'>): Promise<TournamentEntry> {
         const entry: TournamentEntry = { _id: randomUUID(), ...data };
         await this.entries.insertOne(entry);

@@ -27,7 +27,6 @@ export interface WalletContextValue {
   getPublicKey: () => Promise<string>;
   sendBitcoin: (toAddress: string, satoshis: number) => Promise<string>;
   sendTokenTransfer: (tokenAddress: string, toAddress: string, amount: bigint) => Promise<string>;
-  mintTokens: (tokenAddress: string, amount: bigint) => Promise<string>;
   detectWallet: () => WalletType;
 }
 
@@ -205,47 +204,6 @@ function useWalletAdapter(): WalletContextValue {
     return receipt.transactionId;
   }, [connected, wc.provider, wc.network, wc.walletAddress, wc.address]);
 
-  // ── Mint tokens (deployer-only, for testing) ───────────────────────────────
-  const mintTokens = useCallback(async (
-    tokenAddress: string,
-    amount: bigint,
-  ): Promise<string> => {
-    if (!connected || !wc.provider || !wc.network || !wc.walletAddress || !wc.address) {
-      throw new Error('Wallet not connected');
-    }
-
-    if (DEV) console.log('[mintTokens] starting', {
-      token: tokenAddress, amount: amount.toString(), to: wc.walletAddress,
-    });
-
-    const contract = getContract<IOP20Contract>(
-      Address.fromString(tokenAddress),
-      OP_20_ABI,
-      wc.provider,
-      wc.network,
-      wc.address,
-    );
-
-    // Mint to self (deployer)
-    const sim = await contract.mint(wc.address, amount);
-    if (sim.revert) {
-      throw new Error(`Mint reverted: ${sim.revert}`);
-    }
-
-    if (DEV) console.log('[mintTokens] simulation OK, requesting wallet signature...');
-
-    const receipt = await sim.sendTransaction({
-      signer: null as any,
-      mldsaSigner: null,
-      refundTo: wc.walletAddress,
-      maximumAllowedSatToSpend: 500_000n,
-      network: wc.network,
-    });
-
-    if (DEV) console.log('[mintTokens] SUCCESS, txid:', receipt.transactionId);
-    return receipt.transactionId;
-  }, [connected, wc.provider, wc.network, wc.walletAddress, wc.address]);
-
   return {
     type,
     address: wc.walletAddress,
@@ -259,7 +217,6 @@ function useWalletAdapter(): WalletContextValue {
     getPublicKey,
     sendBitcoin,
     sendTokenTransfer,
-    mintTokens,
     detectWallet,
   };
 }

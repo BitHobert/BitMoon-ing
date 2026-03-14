@@ -55,6 +55,33 @@ export const ENEMY_TIERS: Readonly<Record<TierNumber, EnemyTierConfig>> = {
     },
 } as const;
 
+// ── Boss point values (must match frontend BOSS_POOL[].points) ──────────────
+// Bosses send kill events with tier: 5 on boss waves (wave % 5 === 0).
+export const BOSS_POINTS: ReadonlySet<number> = new Set([
+    20_000,   // DEVOURER
+    40_000,   // ABDUCTOR
+    60_000,   // OVERLORD
+    80_000,   // WATCHER
+]);
+
+// ── Planet penalty values (must match frontend PLANETS[].penalty) ────────────
+// Sent as negative `points` on 'miss' events when a planet is destroyed.
+export const PLANET_PENALTIES: ReadonlySet<number> = new Set([
+    7_000,    // MOON
+    10_000,   // NEBULA
+    15_000,   // INFERNO
+    20_000,   // EARTH
+    25_000,   // SATURN
+    40_000,   // DARK MOON
+]);
+
+/**
+ * Returns true if the given wave number is a boss wave (every 5th wave).
+ */
+export function isBossWave(wave: number): boolean {
+    return wave > 0 && wave % 5 === 0;
+}
+
 /**
  * Look up a tier config by tier number.
  * Throws if an invalid tier is provided.
