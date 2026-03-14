@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { AddressVerificator, MessageSigner } from '@btc-vision/transaction';
 import { payments } from '@btc-vision/bitcoin';
 import { Config } from '../config/Config.js';
@@ -198,7 +198,7 @@ export class AuthService {
      * Prevents an attacker from submitting a valid sig with a key that doesn't
      * correspond to the address they claim to own.
      */
-    private verifyPublicKeyMatchesAddress(pubKeyBytes: Buffer, address: string): boolean {
+    private verifyPublicKeyMatchesAddress(pubKeyBytes: Uint8Array, address: string): boolean {
         try {
             const network = Config.NETWORK;
 
@@ -210,7 +210,7 @@ export class AuthService {
             if (xOnly.length !== 32) return false;
 
             const p2tr = payments.p2tr({
-                internalPubkey: Uint8Array.from(xOnly) as unknown as import('@btc-vision/bitcoin').XOnlyPublicKey,
+                internalPubkey: xOnly as unknown as import('@btc-vision/bitcoin').XOnlyPublicKey,
                 network,
             });
             return p2tr.address === address;
@@ -225,7 +225,7 @@ export class AuthService {
      *  - A BIP-322 simple witness for P2TR (Unisat): 0x01 0x40 [64 bytes]
      *  - A BIP-322 simple witness with sighash byte: 0x01 0x41 [65 bytes]
      */
-    private extractRawSignature(sigBytes: Buffer): Buffer | null {
+    private extractRawSignature(sigBytes: Uint8Array): Uint8Array | null {
         // Raw Schnorr: exactly 64 bytes
         if (sigBytes.length === 64) {
             return sigBytes;
@@ -251,10 +251,7 @@ export class AuthService {
     }
 
     private secureNonce(): string {
-        return createHash('sha256')
-            .update(Math.random().toString() + Date.now().toString())
-            .digest('hex')
-            .slice(0, 32);
+        return randomBytes(16).toString('hex');
     }
 
     private hmacSign(data: string): string {

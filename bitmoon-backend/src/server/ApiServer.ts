@@ -11,7 +11,7 @@ import { PaymentService } from '../services/PaymentService.js';
 import { PrizeDistributorService } from '../services/PrizeDistributorService.js';
 import { OPNetService } from '../services/OPNetService.js';
 import { RateLimiter, RATE_LIMITS, type RateLimitConfig } from './RateLimiter.js';
-import type { ZodSchema } from 'zod';
+import type { ZodType } from 'zod';
 import type {
     GameEvent,
     LeaderboardPeriod,
@@ -856,16 +856,16 @@ export class ApiServer {
     }
 
     /** Parse body against a Zod schema; sends 400 and returns null on failure. */
-    private validate<T>(schema: ZodSchema<T>, body: unknown, res: Res): T | null {
-        const result = (schema as any).safeParse(body);
+    private validate<T>(schema: ZodType<T>, body: unknown, res: Res): T | null {
+        const result = schema.safeParse(body);
         if (!result.success) {
             const msg = result.error.issues
-                .map((i: { path: (string | number)[]; message: string }) => `${i.path.join('.')}: ${i.message}`)
+                .map((i) => `${i.path.join('.')}: ${i.message}`)
                 .join('; ');
             res.status(400).json({ error: `Validation failed: ${msg}` });
             return null;
         }
-        return result.data as T;
+        return result.data;
     }
 
     private onError(_req: Req, res: Res, err: Error): void {
