@@ -127,7 +127,7 @@ export class PrizeDistributorService {
         try {
             const contract = this.getContract();
             const call = await contract.recordEntry(typeIndex, periodKeyBigInt, amountPaid);
-            const txResult = await call.sendTransaction(this.txParams());
+            const txResult = await call.sendTransaction(await this.txParams());
             console.log(
                 `[PrizeDistributorService] recordEntry tx sent for ${tournamentType}/${periodKey}:`,
                 txResult.transactionId,
@@ -203,7 +203,7 @@ export class PrizeDistributorService {
 
                 const contract = this.getContract();
                 const call = await contract.depositBonus(typeIndex, periodKeyBigInt, tokenAddr, amount);
-                const txResult = await call.sendTransaction(this.txParams());
+                const txResult = await call.sendTransaction(await this.txParams());
                 txid = txResult.transactionId;
 
                 console.log(
@@ -353,7 +353,7 @@ export class PrizeDistributorService {
                     BigInt(periodKey),
                     w1, w2, w3,
                 );
-                const result = await call.sendTransaction(this.txParams());
+                const result = await call.sendTransaction(await this.txParams());
                 txid = result.transactionId;
                 console.log(`[PrizeDistributorService] distributePrize tx: ${txid}`);
             } catch (err) {
@@ -600,7 +600,7 @@ export class PrizeDistributorService {
                 }
 
                 // Send the transaction with real backend signing keys
-                const receipt = await sim.sendTransaction(this.txParams());
+                const receipt = await sim.sendTransaction(await this.txParams());
                 const txId = receipt.transactionId;
                 txIds.push(txId);
 
@@ -695,7 +695,7 @@ export class PrizeDistributorService {
                 return null;
             }
 
-            const receipt = await sim.sendTransaction(this.txParams());
+            const receipt = await sim.sendTransaction(await this.txParams());
             console.log(`[PrizeDistributorService] Dev cut sent: tx ${receipt.transactionId}`);
             return receipt.transactionId;
         } catch (err) {
@@ -794,7 +794,7 @@ export class PrizeDistributorService {
                         continue;
                     }
 
-                    const receipt = await sim.sendTransaction(this.txParams());
+                    const receipt = await sim.sendTransaction(await this.txParams());
                     txIds.push(`${bonus.tokenSymbol}:${receipt.transactionId}`);
 
                     console.log(
@@ -900,13 +900,22 @@ export class PrizeDistributorService {
         return this.cachedPrizeContract;
     }
 
-    private txParams(): TransactionParameters {
+    private async txParams(): Promise<TransactionParameters> {
+        let feeRate = 10;
+        try {
+            const provider = OPNetService.getInstance().getProvider();
+            const gas = await provider.gasParameters();
+            const live = gas.bitcoin?.recommended?.medium;
+            if (live && live > 0) feeRate = live;
+        } catch {
+            console.warn('[PrizeDistributorService] gasParameters() failed, using fallback feeRate=10');
+        }
         return {
             signer:                   this.wallet.keypair,
             mldsaSigner:              this.wallet.mldsaKeypair ?? null,
             refundTo:                 Config.OPERATOR_P2TR_ADDRESS || this.wallet.p2tr,
             maximumAllowedSatToSpend: 10_000n,
-            feeRate:                  10,
+            feeRate,
             priorityFee:              0n,
             network:                  Config.NETWORK,
         };

@@ -66,10 +66,13 @@ export class PaymentService {
         // ── DEV_MODE bypass ─────────────────────────────────────────────────
         if (Config.DEV_MODE) {
             const feeConfig  = await TournamentService.getInstance().getFeeConfig(tournamentType);
-            const fakeAmount = BigInt(feeConfig.entryFee) * BigInt(quantity);
+            const entryFee   = BigInt(feeConfig.entryFee);
+            const gasTax     = Config.GAS_TAX_SATS;
+            const fakeAmount = (entryFee + gasTax) * BigInt(quantity);
+            // Split on entry fee only — gas tax excluded from pool
             const { devAmount, nextPoolAmount, prizeAmount } =
-                TournamentService.getInstance().computeSplit(fakeAmount);
-            console.warn(`[PaymentService] DEV_MODE — auto-approving payment ${txHash} (qty=${quantity})`);
+                TournamentService.getInstance().computeSplit(entryFee * BigInt(quantity));
+            console.warn(`[PaymentService] DEV_MODE — auto-approving payment ${txHash} (qty=${quantity}, gasTax=${gasTax})`);
             return {
                 valid:          true,
                 confirmations:  999,
@@ -105,7 +108,7 @@ export class PaymentService {
         }
 
         const feeConfig     = await TournamentService.getInstance().getFeeConfig(tournamentType);
-        const expectedTotal = BigInt(feeConfig.entryFee) * BigInt(quantity);
+        const expectedTotal = (BigInt(feeConfig.entryFee) + Config.GAS_TAX_SATS) * BigInt(quantity);
         const provider      = OPNetService.getInstance().getProvider();
 
         // Check transaction exists on-chain
@@ -135,8 +138,10 @@ export class PaymentService {
 
         // For native BTC mode, trust the entry fee amount from config
         const amountPaid = expectedTotal;
+        // Split on entry fee only — gas tax excluded from pool
+        const entryFeeOnly = BigInt(feeConfig.entryFee) * BigInt(quantity);
         const { devAmount, nextPoolAmount, prizeAmount } =
-            TournamentService.getInstance().computeSplit(amountPaid);
+            TournamentService.getInstance().computeSplit(entryFeeOnly);
 
         return {
             valid: confirmations >= Config.MIN_PAYMENT_CONFIRMATIONS,
@@ -160,7 +165,7 @@ export class PaymentService {
         }
 
         const feeConfig     = await TournamentService.getInstance().getFeeConfig(tournamentType);
-        const expectedTotal = BigInt(feeConfig.entryFee) * BigInt(quantity);
+        const expectedTotal = (BigInt(feeConfig.entryFee) + Config.GAS_TAX_SATS) * BigInt(quantity);
         const provider      = OPNetService.getInstance().getProvider();
 
         // Poll for the transaction receipt using a two-phase strategy:
@@ -320,8 +325,10 @@ export class PaymentService {
             };
         }
 
+        // Split on entry fee only — gas tax excluded from pool
+        const entryFeeOnly = BigInt(feeConfig.entryFee) * BigInt(quantity);
         const { devAmount, nextPoolAmount, prizeAmount } =
-            TournamentService.getInstance().computeSplit(amountPaid);
+            TournamentService.getInstance().computeSplit(entryFeeOnly);
 
         return {
             valid: true,

@@ -133,6 +133,14 @@ export const Config = {
     /** Minimum on-chain confirmations before a payment is considered verified */
     MIN_PAYMENT_CONFIRMATIONS: parseInt(process.env['MIN_PAYMENT_CONFIRMATIONS'] ?? '1', 10),
 
+    /**
+     * Gas tax per entry in raw token units (sats).
+     * Added to the OP-20 transfer amount on top of the entry fee.
+     * Stays 100 % with the operator — excluded from the 80/15/5 prize split.
+     * Subsidises the operator's BTC gas costs for prize distribution transactions.
+     */
+    GAS_TAX_SATS: BigInt(process.env['GAS_TAX_SATS'] ?? '500'),
+
     // ── Prize Distribution ────────────────────────────────────────────────────
 
     /** Enable OP-20 token prize payouts from the operator wallet to tournament winners */

@@ -99,8 +99,10 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
       let txid: string;
 
       if (tournament.tokenAddress) {
-        // OP-20 token transfer (LFGT or other token) — quantity × fee
-        const amount = BigInt(tournament.entryFee) * BigInt(quantity);
+        // OP-20 token transfer — (entryFee + gasTax) × quantity
+        const fee    = BigInt(tournament.entryFee);
+        const gasTax = BigInt(tournament.gasTax || '0');
+        const amount = (fee + gasTax) * BigInt(quantity);
         txid = await wallet.sendTokenTransfer(
           tournament.tokenAddress,
           tournament.prizeContractAddress,
@@ -108,7 +110,9 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
         );
       } else {
         // Native BTC fallback (for when opnet.web3.sendBitcoin is fixed)
-        const satoshis = Number(BigInt(tournament.entryFee) * BigInt(quantity));
+        const fee    = BigInt(tournament.entryFee);
+        const gasTax = BigInt(tournament.gasTax || '0');
+        const satoshis = Number((fee + gasTax) * BigInt(quantity));
         txid = await wallet.sendBitcoin(tournament.prizeContractAddress, satoshis);
       }
 
@@ -157,7 +161,9 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
 
   const color      = TYPE_COLORS[tournament.tournamentType] ?? 'var(--color-orange)';
   const feeTokens  = fmtTokens(tournament.entryFee);
-  const totalCost  = fmtTokens((BigInt(tournament.entryFee) * BigInt(quantity)).toString());
+  const perTurnTotal = BigInt(tournament.entryFee) + BigInt(tournament.gasTax || '0');
+  const totalCost  = fmtTokens((perTurnTotal * BigInt(quantity)).toString());
+  const hasGasTax  = BigInt(tournament.gasTax || '0') > 0n;
   const prizePool  = fmtTokens(tournament.prizePool);
   const tokenLabel = tournament.tokenAddress ? 'LFGT' : 'tBTC';
 
@@ -240,12 +246,13 @@ export function TournamentEntryPage({ navigate, ctx }: Props) {
               {quantity > 1 ? (
                 <>
                   <strong style={{ color: 'var(--color-orange)' }}>{quantity} turns</strong> × {feeTokens} {tokenLabel} = <strong style={{ color: 'var(--color-orange)' }}>{totalCost} {tokenLabel}</strong>
+                  {hasGasTax && <span style={{ fontSize: 7, color: 'var(--color-text-dim)' }}> (incl. gas)</span>}
                   <br/>
                   Each turn is one game. Every score counts to the leaderboard.
                 </>
               ) : (
                 <>
-                  Sending <strong style={{ color: 'var(--color-orange)' }}>{feeTokens} {tokenLabel}</strong> for 1 turn.
+                  Sending <strong style={{ color: 'var(--color-orange)' }}>{totalCost} {tokenLabel}</strong>{hasGasTax && <span style={{ fontSize: 7 }}> (incl. gas)</span>} for 1 turn.
                   Your score will be eligible for the {tournament.tournamentType} prize pool.
                 </>
               )}

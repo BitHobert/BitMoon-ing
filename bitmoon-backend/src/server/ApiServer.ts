@@ -534,10 +534,9 @@ export class ApiServer {
         try {
             // Deferred split: pool amounts start at '0' — the 5/15/80 split happens
             // per-turn when the player actually plays (in consumeTurn).
-            // feePerTurn = total paid ÷ turns purchased.
-            const feePerTurn = quantity > 0
-                ? (verification.amountPaid / BigInt(quantity)).toString()
-                : '0';
+            // feePerTurn = entry fee from config (gas tax excluded from split).
+            const feeConfig  = await this.tournament.getFeeConfig(tournamentType);
+            const feePerTurn = feeConfig.entryFee;
 
             const entry = await this.tournament.recordEntry({
                 tournamentType,
@@ -556,10 +555,11 @@ export class ApiServer {
                 feePerTurn,
             });
 
-            // Notify the on-chain contract to update pool accounting (non-blocking)
+            // Notify the on-chain contract with entry fee portion only (gas tax excluded)
             if (verification.valid) {
+                const entryAmount = BigInt(feeConfig.entryFee) * BigInt(quantity);
                 void PrizeDistributorService.getInstance()
-                    .notifyEntry(tournamentType, key, verification.amountPaid)
+                    .notifyEntry(tournamentType, key, entryAmount)
                     .catch(err => console.error('[ApiServer] notifyEntry failed:', err));
             }
 

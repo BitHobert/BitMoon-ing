@@ -229,6 +229,8 @@ export interface TournamentInfo {
     readonly tournamentKey: string;
     /** Entry fee in raw OP-20 token units (as string) */
     readonly entryFee: string;
+    /** Gas tax per entry in raw token units — added to transfer amount, excluded from prize split */
+    readonly gasTax: string;
     /** Address of the OP-20 entry fee token contract */
     readonly tokenAddress: string;
     /** Address of the on-chain PrizeDistributor contract holding the prize pools */

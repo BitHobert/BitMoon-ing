@@ -564,6 +564,7 @@ export class TournamentService {
                     tournamentType:  type,
                     tournamentKey:   period.tournamentKey,
                     entryFee:        config.entryFee,
+                    gasTax:          Config.GAS_TAX_SATS.toString(),
                     tokenAddress:         Config.ENTRY_TOKEN_ADDRESS,
                     prizeContractAddress: Config.PRIZE_CONTRACT_ADDRESS,
                     prizePool:       totalPrize.toString(),

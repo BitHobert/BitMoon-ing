@@ -43,6 +43,7 @@ export interface TournamentInfo {
   readonly tournamentType: TournamentType;
   readonly tournamentKey: string;
   readonly entryFee: string;
+  readonly gasTax: string;
   readonly tokenAddress: string;
   readonly prizeContractAddress: string;
   readonly prizePool: string;
