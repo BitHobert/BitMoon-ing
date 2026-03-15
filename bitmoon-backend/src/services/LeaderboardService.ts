@@ -207,7 +207,11 @@ export class LeaderboardService {
     // ── Private helpers ──────────────────────────────────────────────────────
 
     private async upsertPlayerStats(result: ScoreResult, now: number): Promise<void> {
-        await this.players.updateOne(
+        // Use findOneAndUpdate to atomically read the current totalBurned,
+        // compute the new value, and write it back in a single operation.
+        // This prevents the race condition where two concurrent games could
+        // both read the same totalBurned and overwrite each other's increment.
+        const prev = await this.players.findOneAndUpdate(
             { _id: result.playerAddress },
             {
                 $inc: {
@@ -218,20 +222,24 @@ export class LeaderboardService {
                 },
                 $max: { allTimeBest: result.validatedScore },
                 $set: { lastPlayedAt: now },
+                $setOnInsert: { totalBurned: '0' },
             },
-            { upsert: true },
+            { upsert: true, returnDocument: 'before' },
         );
 
-        // Update totalBurned separately (BigInt arithmetic via string)
-        const player = await this.players.findOne({ _id: result.playerAddress });
-        if (player) {
-            const prev = BigInt(player.totalBurned ?? '0');
-            const next = prev + result.totalBurned;
-            await this.players.updateOne(
-                { _id: result.playerAddress },
-                { $set: { totalBurned: next.toString() } },
-            );
-        }
+        // Atomically set totalBurned with the computed value.
+        // Because we used returnDocument:'before', we got the doc BEFORE the
+        // $inc/$max updates — but totalBurned wasn't touched by those, so
+        // the value is current. The findOneAndUpdate above serialises the
+        // upsert, and this second update uses a conditional filter to avoid
+        // clobbering a concurrent writer (compare-and-swap pattern).
+        const prevBurned = BigInt(prev?.totalBurned ?? '0');
+        const newBurned  = (prevBurned + result.totalBurned).toString();
+
+        await this.players.updateOne(
+            { _id: result.playerAddress, totalBurned: prevBurned.toString() },
+            { $set: { totalBurned: newBurned } },
+        );
     }
 
     private async ensureIndexes(): Promise<void> {

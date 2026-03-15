@@ -68,6 +68,13 @@ export const Config = {
     DEV_MODE: process.env['DEV_MODE'] === 'true',
 
     /**
+     * When true AND not on mainnet, PaymentService will trust unverifiable
+     * transactions (e.g. dropped txs on testnet with unreliable RPC).
+     * MUST be explicitly set — defaults to false even on testnet.
+     */
+    TRUST_UNVERIFIED_TX: process.env['TRUST_UNVERIFIED_TX'] === 'true',
+
+    /**
      * Allowed CORS origins (comma-separated).
      * In production: set to your frontend domain(s).
      * Default '*' allows all origins (dev mode only).

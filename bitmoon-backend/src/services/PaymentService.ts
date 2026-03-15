@@ -229,10 +229,10 @@ export class PaymentService {
                 }
 
                 // Never found anywhere — likely a dropped tx
-                if (Config.OPNET_NETWORK !== 'mainnet') {
+                if (Config.TRUST_UNVERIFIED_TX && Config.OPNET_NETWORK !== 'mainnet') {
                     console.warn(
                         `[PaymentService] Tx ${txHash} not found in receipt or mempool after ${MAX_RETRIES} retries — ` +
-                        `TRUSTING on ${Config.OPNET_NETWORK} (would reject on mainnet)`,
+                        `TRUSTING (TRUST_UNVERIFIED_TX=true on ${Config.OPNET_NETWORK})`,
                     );
                     return {
                         valid: true,
@@ -301,11 +301,11 @@ export class PaymentService {
 
         // Validate total payment — allow 1% tolerance
         if (amountPaid < (expectedTotal * 99n) / 100n) {
-            // On non-mainnet, trust if receipt was found but event parsing failed
-            if (Config.OPNET_NETWORK !== 'mainnet' && receipt) {
+            // Trust if explicitly opted in AND not on mainnet
+            if (Config.TRUST_UNVERIFIED_TX && Config.OPNET_NETWORK !== 'mainnet' && receipt) {
                 console.warn(
                     `[PaymentService] Event parsing returned ${amountPaid} units (expected ${expectedTotal}) — ` +
-                    `TRUSTING on ${Config.OPNET_NETWORK} (would reject on mainnet)`,
+                    `TRUSTING (TRUST_UNVERIFIED_TX=true on ${Config.OPNET_NETWORK})`,
                 );
                 return {
                     valid: true,

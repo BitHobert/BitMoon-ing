@@ -267,6 +267,13 @@ export interface PrizeDistribution {
     readonly tournamentType: TournamentType;
     /** Period start block (matches tournamentKey in tournament_entries) */
     readonly tournamentKey: string;
+    /**
+     * Distribution status for crash-safe idempotency:
+     * - 'pending'   — DB record created, on-chain sends not yet started/completed
+     * - 'completed' — all sends finished and tx IDs recorded
+     * Missing on legacy docs (treat as 'completed').
+     */
+    readonly status?: 'pending' | 'completed';
     /** On-chain distributePrize() transaction hash */
     readonly txHash: string;
     readonly winners: ReadonlyArray<{

@@ -337,31 +337,6 @@ export class PrizeDistributorService {
             return; // Don't record a distribution — carryover accumulates for the next period
         }
 
-        // On-chain distribution (only if prize contract is configured)
-        let txid = '';
-        if (this.isContractReady()) {
-            try {
-                const zero  = Address.dead();
-                // Player addresses in MongoDB are bech32 (opt1p...) — resolve to MLDSA key hashes.
-                const w1: Address = top3[0] ? await this.resolveAddress(top3[0].playerAddress) : zero;
-                const w2: Address = top3[1] ? await this.resolveAddress(top3[1].playerAddress) : zero;
-                const w3: Address = top3[2] ? await this.resolveAddress(top3[2].playerAddress) : zero;
-
-                const contract = this.getContract();
-                const call = await contract.distributePrize(
-                    this.typeIndex(type),
-                    BigInt(periodKey),
-                    w1, w2, w3,
-                );
-                const result = await call.sendTransaction(await this.txParams());
-                txid = result.transactionId;
-                console.log(`[PrizeDistributorService] distributePrize tx: ${txid}`);
-            } catch (err) {
-                console.error('[PrizeDistributorService] on-chain distributePrize failed (will still record locally):', err);
-                // Continue — still record the distribution in MongoDB
-            }
-        }
-
         // Compute prize amounts from the on-chain pool (use backend DB as approximation)
         // Total prize = 80% from THIS period + accumulated 15% carryover from previous periods
         const ts = TournamentService.getInstance();
@@ -387,9 +362,64 @@ export class PrizeDistributorService {
             winners.push({ place: 3, address: top3[2].playerAddress, amount: p3.toString(), score: top3[2].score });
         }
 
-        // ── BTC Prize Distribution ────────────────────────────────────────────
-        // Send native BTC to each winner from the operator wallet.
-        // Prize amounts are configured in env (BTC_PRIZE_*_SATS) or default to 0.
+        // ── STEP 1: Insert a "pending" distribution doc BEFORE any on-chain sends.
+        // This prevents double-pay: if the process crashes mid-send, the pending doc
+        // exists and the watcher won't re-trigger. The unique index on (type, key)
+        // ensures only one process can claim this distribution.
+        const distId = randomUUID();
+        const pendingDoc: PrizeDistribution = {
+            _id:            distId,
+            status:         'pending',
+            tournamentType: type,
+            tournamentKey:  periodKey,
+            txHash:         '',
+            winners,
+            totalPrize:     totalPrize.toString(),
+            distributedAt:  Date.now(),
+            blockNumber:    prizeBlock.toString(),
+            btcTxIds:       [],
+            tokenTxIds:     [],
+        };
+
+        try {
+            await this.distributions.insertOne(pendingDoc);
+        } catch (err) {
+            // Unique index violation means another process beat us to it — abort
+            if ((err as NodeJS.ErrnoException & { code?: number }).code === 11000) {
+                console.log(`[PrizeDistributorService] Distribution for ${type}/${periodKey} already claimed — skipping`);
+                return;
+            }
+            throw err;
+        }
+
+        // ── STEP 2: Perform all on-chain sends ──────────────────────────────
+
+        // On-chain distribution (only if prize contract is configured)
+        let txid = '';
+        if (this.isContractReady()) {
+            try {
+                const zero  = Address.dead();
+                // Player addresses in MongoDB are bech32 (opt1p...) — resolve to MLDSA key hashes.
+                const w1: Address = top3[0] ? await this.resolveAddress(top3[0].playerAddress) : zero;
+                const w2: Address = top3[1] ? await this.resolveAddress(top3[1].playerAddress) : zero;
+                const w3: Address = top3[2] ? await this.resolveAddress(top3[2].playerAddress) : zero;
+
+                const contract = this.getContract();
+                const call = await contract.distributePrize(
+                    this.typeIndex(type),
+                    BigInt(periodKey),
+                    w1, w2, w3,
+                );
+                const result = await call.sendTransaction(await this.txParams());
+                txid = result.transactionId;
+                console.log(`[PrizeDistributorService] distributePrize tx: ${txid}`);
+            } catch (err) {
+                console.error('[PrizeDistributorService] on-chain distributePrize failed (will still record locally):', err);
+                // Continue — still send prizes and record the distribution
+            }
+        }
+
+        // BTC Prize Distribution
         const btcTxIds: string[] = [];
         if (Config.BTC_PRIZE_ENABLED && winners.length > 0) {
             try {
@@ -400,9 +430,7 @@ export class PrizeDistributorService {
             }
         }
 
-        // ── OP-20 Token Prize Distribution ────────────────────────────────────
-        // Send LFGT tokens from operator wallet to each winner.
-        // Prize amounts are the DB-tracked pool shares (already in raw token units).
+        // OP-20 Token Prize Distribution
         const tokenTxIds: string[] = [];
         if (Config.TOKEN_PRIZE_ENABLED && winners.length > 0) {
             try {
@@ -413,9 +441,7 @@ export class PrizeDistributorService {
             }
         }
 
-        // ── Dev cut transfer ────────────────────────────────────────────────
-        // Send accumulated 5 % dev fees to the separate DEV_WALLET_ADDRESS.
-        // Non-blocking — failure does not prevent distribution from being recorded.
+        // Dev cut transfer
         let devCutTxId: string | null = null;
         try {
             devCutTxId = await this.sendDevCut(type, periodKey);
@@ -423,9 +449,7 @@ export class PrizeDistributorService {
             console.error('[PrizeDistributorService] Dev cut transfer failed:', err);
         }
 
-        // ── Sponsor Bonus Token Distribution ──────────────────────────────
-        // Send any sponsor-deposited tokens (M2M, MOTO, etc.) to the winners.
-        // Same 70/20/10 split as the LFGT prize pool.
+        // Sponsor Bonus Token Distribution
         const sponsorTxIds: string[] = [];
         if (winners.length > 0) {
             try {
@@ -436,29 +460,20 @@ export class PrizeDistributorService {
             }
         }
 
-        const doc: PrizeDistribution = {
-            _id:            randomUUID(),
-            tournamentType: type,
-            tournamentKey:  periodKey,
-            txHash:         txid || btcTxIds[0] || tokenTxIds[0] || '',
-            winners,
-            totalPrize:     totalPrize.toString(),
-            distributedAt:  Date.now(),
-            blockNumber:    prizeBlock.toString(),
-            btcTxIds,
-            tokenTxIds,
-            ...(devCutTxId ? { devCutTxId } : {}),
-            ...(sponsorTxIds.length > 0 ? { sponsorTxIds } : {}),
-        };
-
-        try {
-            await this.distributions.insertOne(doc);
-        } catch (err) {
-            // Unique index violation means another process beat us to it — that's fine
-            if ((err as NodeJS.ErrnoException & { code?: number }).code !== 11000) {
-                throw err;
-            }
-        }
+        // ── STEP 3: Update the pending doc to "completed" with all tx IDs ───
+        await this.distributions.updateOne(
+            { _id: distId },
+            {
+                $set: {
+                    status:  'completed',
+                    txHash:  txid || btcTxIds[0] || tokenTxIds[0] || '',
+                    btcTxIds,
+                    tokenTxIds,
+                    ...(devCutTxId ? { devCutTxId } : {}),
+                    ...(sponsorTxIds.length > 0 ? { sponsorTxIds } : {}),
+                },
+            },
+        );
 
         // Roll over unplayed entries to the next period (non-fatal)
         try {

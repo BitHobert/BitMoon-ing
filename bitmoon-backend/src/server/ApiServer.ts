@@ -157,17 +157,17 @@ export class ApiServer {
         });
 
         this.app.post('/v1/session/start', async (req, res) => {
-            if (!this.rateLimit(req, res, RATE_LIMITS.session)) return;
+            if (!this.rateLimitWithWallet(req, res, RATE_LIMITS.session)) return;
             await this.handleSessionStart(req, res);
         });
 
         this.app.post('/v1/session/game', async (req, res) => {
-            if (!this.rateLimit(req, res, RATE_LIMITS.session)) return;
+            if (!this.rateLimitWithWallet(req, res, RATE_LIMITS.session)) return;
             await this.handleCreateGameSession(req, res);
         });
 
         this.app.post('/v1/session/end', async (req, res) => {
-            if (!this.rateLimit(req, res, RATE_LIMITS.submit)) return;
+            if (!this.rateLimitWithWallet(req, res, RATE_LIMITS.submit)) return;
             await this.handleSessionEnd(req, res);
         });
 
@@ -209,7 +209,7 @@ export class ApiServer {
 
         // Tournament — player (Bearer auth)
         this.app.post('/v1/tournament/enter', async (req, res) => {
-            if (!this.rateLimit(req, res, RATE_LIMITS.entry)) return;
+            if (!this.rateLimitWithWallet(req, res, RATE_LIMITS.entry)) return;
             await this.handleTournamentEnter(req, res);
         });
 
@@ -835,6 +835,31 @@ export class ApiServer {
             res.header('X-RateLimit-Remaining', String(remaining));
             res.status(429).json({ error: 'Too many requests — slow down' });
             return false;
+        }
+        return true;
+    }
+
+    /**
+     * Enforce rate limit by BOTH IP and wallet address (from Bearer token).
+     * Authenticated routes should use this so a player with multiple proxies
+     * can't bypass the limit — the wallet address is still rate-limited.
+     */
+    private rateLimitWithWallet(req: Req, res: Res, config: RateLimitConfig): boolean {
+        // Always check IP first
+        if (!this.rateLimit(req, res, config)) return false;
+
+        // Also check wallet address if a valid Bearer token is present
+        const wallet = this.extractTokenSubject(req);
+        if (wallet) {
+            const walletKey = `wallet:${wallet}:${req.path}`;
+            if (!this.rateLimiter.allow(walletKey, config)) {
+                const remaining = this.rateLimiter.remaining(walletKey, config);
+                res.header('Retry-After', String(Math.ceil(config.windowMs / 1000)));
+                res.header('X-RateLimit-Limit', String(config.maxRequests));
+                res.header('X-RateLimit-Remaining', String(remaining));
+                res.status(429).json({ error: 'Too many requests for this wallet — slow down' });
+                return false;
+            }
         }
         return true;
     }
