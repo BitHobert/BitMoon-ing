@@ -71,7 +71,7 @@ export const AdminSnapshotSchema = z.object({
 // ── PATCH /v1/admin/tournament/:type/fee ────────────────────────────────────
 
 export const AdminUpdateFeeSchema = z.object({
-    amount: BigIntString.refine(v => BigInt(v) > 0n, 'Must be positive'),
+    amount: BigIntString.refine(v => { try { return BigInt(v) > 0n; } catch { return false; } }, 'Must be positive'),
 });
 
 // ── POST /v1/admin/sponsor-bonus ────────────────────────────────────────────
@@ -91,7 +91,7 @@ export const AdminSponsorBonusSchema = z.object({
     periodKey:      BigIntString,
     tokenAddress:   z.string().min(1),
     tokenSymbol:    z.string().min(1).max(20),
-    amount:         BigIntString.refine(v => BigInt(v) > 0n, 'Must be positive'),
+    amount:         BigIntString.refine(v => { try { return BigInt(v) > 0n; } catch { return false; } }, 'Must be positive'),
     decimals:       z.number().int().min(0).max(18).optional(),
     links:          z.array(SponsorLink).max(3).optional(),
     prizeShares:    z.array(PrizeShare).max(3)
