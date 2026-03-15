@@ -1,6 +1,7 @@
 import { MongoClient, Db, Collection, IndexDescription } from 'mongodb';
 import { Config } from '../config/Config.js';
 import { dayKey, weekKey, monthKey } from '../utils/timeKeys.js';
+import { AuditService } from './AuditService.js';
 import { GameSupplyService } from './GameSupplyService.js';
 import type {
     BadgeLevel,
@@ -81,6 +82,7 @@ export class LeaderboardService {
 
         // Initialise the game supply document in the same DB
         await GameSupplyService.getInstance().connect(this.db);
+        await AuditService.getInstance().connect(this.db);
 
         await this.ensureIndexes();
         console.log('[LeaderboardService] Connected to MongoDB');

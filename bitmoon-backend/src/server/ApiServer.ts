@@ -9,6 +9,7 @@ import { GiveawayService } from '../services/GiveawayService.js';
 import { TournamentService } from '../services/TournamentService.js';
 import { PaymentService } from '../services/PaymentService.js';
 import { PrizeDistributorService } from '../services/PrizeDistributorService.js';
+import { AuditService } from '../services/AuditService.js';
 import { OPNetService } from '../services/OPNetService.js';
 import { RateLimiter, RATE_LIMITS, type RateLimitConfig } from './RateLimiter.js';
 import type { ZodType } from 'zod';
@@ -142,8 +143,14 @@ export class ApiServer {
     // ── Routes ───────────────────────────────────────────────────────────────
 
     private setupRoutes(): void {
-        this.app.get('/health', (_req, res) => {
-            res.json({ status: 'ok', timestamp: Date.now() });
+        this.app.get('/health', async (_req, res) => {
+            try {
+                // Ping MongoDB to verify the connection is alive
+                await this.leaderboard.getDb().command({ ping: 1 });
+                res.json({ status: 'ok', timestamp: Date.now() });
+            } catch {
+                res.status(503).json({ status: 'unhealthy', reason: 'database unreachable', timestamp: Date.now() });
+            }
         });
 
         this.app.get('/v1/supply', async (req, res) => {
@@ -254,6 +261,15 @@ export class ApiServer {
         this.app.get('/v1/admin/sponsor-bonus', async (req, res) => {
             if (!this.rateLimit(req, res, RATE_LIMITS.admin)) return;
             await this.handleAdminGetBonuses(req, res);
+        });
+
+        // Admin — audit log
+        this.app.get('/v1/admin/audit-logs', async (req, res) => {
+            if (!this.rateLimit(req, res, RATE_LIMITS.admin)) return;
+            if (!this.verifyAdmin(req, res)) return;
+            const limit = Math.min(parseInt(String(req.query['limit'] ?? '50'), 10), 200);
+            const logs = await AuditService.getInstance().getRecent(limit);
+            res.json({ logs });
         });
     }
 
@@ -616,6 +632,7 @@ export class ApiServer {
 
         try {
             const snapshot = await this.giveaway.snapshotLeaderboard(label, period, type, limit);
+            AuditService.getInstance().log('snapshot', { label, period, type, limit }, req.ip);
             res.json({ success: true, snapshot });
         } catch (err) {
             res.status(409).json({ error: String(err) });
@@ -656,6 +673,7 @@ export class ApiServer {
         const { amount } = body;
 
         await this.tournament.updateFeeConfig(type, amount);
+        AuditService.getInstance().log('update_fee', { tournamentType: type, amount }, req.ip);
         const config = await this.tournament.getFeeConfig(type);
         res.json({ success: true, config });
     }
@@ -780,6 +798,7 @@ export class ApiServer {
         try {
             const bonus = await PrizeDistributorService.getInstance()
                 .depositBonus(tournamentType, periodKey, tokenAddress.trim(), tokenSymbol.trim().toUpperCase(), BigInt(amount), decimals ?? 8, links ?? [], prizeShares ?? [{ place: 1, percent: 100 }]);
+            AuditService.getInstance().log('deposit_bonus', { tournamentType, periodKey, tokenSymbol, amount }, req.ip);
             res.status(201).json({ success: true, bonus });
         } catch (err: unknown) {
             const message = (err as Error).message ?? 'depositBonus failed';

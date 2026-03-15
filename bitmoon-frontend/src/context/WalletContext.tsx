@@ -1,10 +1,15 @@
-import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef, type ReactNode } from 'react';
 import { useWalletConnect, SupportedWallets } from '@btc-vision/walletconnect';
 import { TransactionFactory, MessageSigner, Address } from '@btc-vision/transaction';
 import { getContract, IOP20Contract, OP_20_ABI } from 'opnet';
 import { IS_MAINNET } from '../config/network';
 
 const DEV = import.meta.env.DEV;
+
+/** Fallback fee rate if gasParameters() fails */
+const FALLBACK_FEE_RATE = 10;
+/** Cache live fee rates for 60s to avoid spamming the RPC */
+const FEE_CACHE_TTL_MS = 60_000;
 
 // ── Public interface (unchanged for consumers) ──────────────────────────────
 
@@ -38,6 +43,31 @@ function useWalletAdapter(): WalletContextValue {
   const wc = useWalletConnect();
 
   const connected = !!wc.walletAddress;
+
+  // ── Dynamic fee rate cache ──────────────────────────────────────────────
+  const feeCache = useRef<{ rate: number; fetchedAt: number }>({ rate: FALLBACK_FEE_RATE, fetchedAt: 0 });
+
+  /** Fetch live fee rate from OPNet gasParameters(), with 60s caching. */
+  const getLiveFeeRate = useCallback(async (): Promise<number> => {
+    const now = Date.now();
+    if (now - feeCache.current.fetchedAt < FEE_CACHE_TTL_MS) {
+      return feeCache.current.rate;
+    }
+    if (!wc.provider) return FALLBACK_FEE_RATE;
+    try {
+      const gas = await wc.provider.gasParameters();
+      const live = (gas as { bitcoin?: { recommended?: { medium?: number } } })
+        .bitcoin?.recommended?.medium;
+      if (live && live > 0) {
+        feeCache.current = { rate: live, fetchedAt: now };
+        if (DEV) console.log('[WalletContext] Live fee rate:', live, 'sat/vB');
+        return live;
+      }
+    } catch {
+      if (DEV) console.warn('[WalletContext] gasParameters() failed, using fallback');
+    }
+    return feeCache.current.rate || FALLBACK_FEE_RATE;
+  }, [wc.provider]);
 
   // Detect network mismatch: compare wallet's chainType against expected network
   const networkMismatch = useMemo(() => {
@@ -113,7 +143,10 @@ function useWalletAdapter(): WalletContextValue {
 
     if (DEV) console.log('[sendBitcoin] UTXOs fetched:', utxos.length);
 
-    // 2. Build + sign transaction using the walletconnect signer
+    // 2. Get live fee rate from OPNet RPC
+    const feeRate = await getLiveFeeRate();
+
+    // 3. Build + sign transaction using the walletconnect signer
     //    (bypasses detectFundingOPWallet which calls the broken opnet.web3.sendBitcoin)
     const factory = new TransactionFactory();
     const result = await factory.createBTCTransfer({
@@ -123,7 +156,7 @@ function useWalletAdapter(): WalletContextValue {
       utxos,
       from: wc.walletAddress,
       to: toAddress,
-      feeRate: 10,
+      feeRate,
       amount: BigInt(satoshis),
       priorityFee: 0n,
       gasSatFee: 0n,
@@ -139,7 +172,7 @@ function useWalletAdapter(): WalletContextValue {
 
     if (DEV) console.log('[sendBitcoin] SUCCESS, txid:', broadcast.result);
     return broadcast.result;
-  }, [connected, wc.walletAddress, wc.provider, wc.network, wc.signer]);
+  }, [connected, wc.walletAddress, wc.provider, wc.network, wc.signer, getLiveFeeRate]);
 
   // ── OP-20 token transfer (contract interaction path) ──────────────────────
   const sendTokenTransfer = useCallback(async (
@@ -190,19 +223,25 @@ function useWalletAdapter(): WalletContextValue {
 
     if (DEV) console.log('[sendTokenTransfer] simulation OK, requesting wallet signature...');
 
-    // 4. Send — signer & mldsaSigner are ALWAYS null on frontend
+    // 4. Get live fee rate for the transaction
+    const feeRate = await getLiveFeeRate();
+    // Scale max spend with fee rate: base 500k sats at 10 sat/vB, scales proportionally
+    const maxSpend = BigInt(Math.ceil(500_000 * (feeRate / FALLBACK_FEE_RATE)));
+
+    // 5. Send — signer & mldsaSigner are ALWAYS null on frontend
     //    The wallet extension (OP_WALLET) handles signing via detectInteractionOPWallet
     const receipt = await sim.sendTransaction({
       signer: null as any,       // ALWAYS null on frontend — wallet signs
       mldsaSigner: null,         // ALWAYS null on frontend — wallet signs
       refundTo: wc.walletAddress,
-      maximumAllowedSatToSpend: 500_000n,
+      maximumAllowedSatToSpend: maxSpend,
+      feeRate,
       network: wc.network,
     });
 
     if (DEV) console.log('[sendTokenTransfer] SUCCESS, txid:', receipt.transactionId);
     return receipt.transactionId;
-  }, [connected, wc.provider, wc.network, wc.walletAddress, wc.address]);
+  }, [connected, wc.provider, wc.network, wc.walletAddress, wc.address, getLiveFeeRate]);
 
   return {
     type,
